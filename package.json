@@ -1,0 +1,59 @@
+{
+  "name": "dsh-oh-my-token",
+  "version": "0.2.4",
+  "description": "Native token admission for DeepSeek Harness: command-output filters, retrieval-style reads, a conservative prose trimmer, and a settings page that reports what was saved. No RTK binary, no codegraph server.",
+  "type": "module",
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "lib",
+    "bin",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "bin": {
+    "oh-my-token": "./bin/oh-my-token.js",
+    "dsh-oh-my-token": "./bin/oh-my-token.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "check": "node --check index.js && node --check client.js && node --check bin/oh-my-token.js",
+    "test": "node --test",
+    "verify": "npm run check && npm test"
+  },
+  "meta": {
+    "title": "Oh My Token",
+    "description": "Compresses command output at the source, outlines large reads instead of pasting them, and trims sentence-final periods from prose. Every transform has a switch on one Settings page, which also reports what was saved."
+  },
+  "dsh": {
+    "engines": {
+      "dsh": ">=0.2.0-rc.2"
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true
+    }
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "cordis",
+    "tokens",
+    "context",
+    "compression"
+  ],
+  "license": "MIT"
+}

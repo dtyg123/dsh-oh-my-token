@@ -1,0 +1,55 @@
+# Bundle patch for dsh-oh-my-token.
+#
+# One row, every tunable in `config`. Edit this patch, not the source.
+#
+# The five `filters` switches, the two `retrieval` switches and the whole
+# `prose` block can also be flipped from Settings → 省 Token without editing
+# this file; the page writes its choice to dsh-oh-my-token.state.json in the
+# profile directory, and that file wins over this config on the next start.
+- insert:
+    - id: oh-my-token
+      name: dsh-oh-my-token
+      config:
+        enabled: true
+
+        # Character budgets. 6000 chars is roughly 1500-1700 English tokens.
+        # `read` gets more because file content is the substrate for edits.
+        budgets:
+          default: 6000
+          read: 12000
+          grep: 6000
+          bash: 4000
+          errorFactor: 2
+
+        # Leave small results alone.
+        minChars: 800
+        # Discard a rewrite that saves less than this fraction.
+        minGain: 0.05
+
+        filters:
+          pytest: true
+          git: true
+          tsc: true
+          packageManager: true
+          generic: true
+
+        retrieval:
+          # Only outline a read when the file is larger than this and the model
+          # did not pass offset/limit.
+          readOutlineOverLines: 400
+          maxOutlineSymbols: 60
+          maxGrepMatches: 50
+
+        prose:
+          # Drop sentence-final `.` / `。` on prose lines only. Code, diffs,
+          # paths, URLs, versions and decimals are never touched.
+          # scope: filtered (only prose outputs such as git log) | all | off.
+          stripTrailingPeriod: true
+          scope: filtered
+
+        # spill: save full text through ctx.spillStore when available, else
+        # fall back to a re-run hint. none: never elide without a handle.
+        recovery: spill
+
+        # 0 disables periodic stats logging.
+        logEvery: 0
