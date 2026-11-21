@@ -60,12 +60,16 @@ window.__ModuleLoader__.load({
         all: '所有散文',
       },
       systemPrompt: '系统提示词',
-      systemPromptHint: '把你写的文本加入系统提示词：追加到末尾，或整体替换。{{变量}} 保持字面量。保存后下一次请求生效。',
-      systemPromptModes: { append: '追加到末尾', replace: '整体替换' },
-      systemPromptPlaceholder: '在这里写下要发送给模型的系统提示词…',
+      systemPromptHint: '把提示词拆成若干小段（卡片），从上到下按顺序拼到现有系统提示词末尾。{{变量}} 保持字面量。保存后下一次请求生效。',
+      systemPromptPlaceholder: '写下这一段的提示词…',
+      addSegment: '添加一小段',
+      moveUp: '上移',
+      moveDown: '下移',
+      removeSegment: '删除这一段',
+      emptySegments: '还没有任何段落。点击「添加一小段」开始。',
       saveSystemPrompt: '保存系统提示词',
       restoreSystemPrompt: '恢复默认提示词',
-      nothingToRead: '没有读到当前生效的系统提示词（服务端未返回内容），请先发一条消息后再试。',
+      nothingToRead: '没有读到当前生效的系统提示词（服务端未返回内容）。',
       modes: {
         pytest: ['pytest 结果', '通过时只留一行结论；失败时保留 FAILED、断言与摘要'],
         git: ['git 输出', 'status 干净时折叠成一行，diff 只留文件头和变更行'],
@@ -75,7 +79,7 @@ window.__ModuleLoader__.load({
         readOutline: ['大文件大纲', '超过行数阈值且没给 offset/limit 的 read 只返回符号大纲'],
         grepCap: ['搜索结果截断', '匹配过多时只留前 N 条并说明剩余数量'],
         proseStrip: ['删除句末句号', '删除散文行、你的输入与助手回复（含历史消息）末尾的一个句号，省下每个句子的一个 token'],
-        systemPrompt: ['修改系统提示词', '把你写的文本加入或替换系统提示词'],
+        systemPrompt: ['修改系统提示词', '把若干小段分段拼接到系统提示词末尾'],
       },
       file: '配置目录',
       none: '未找到配置目录，改动不会落盘',
@@ -156,6 +160,55 @@ window.__ModuleLoader__.load({
       ),
       h(Switch, { on, disabled: busy === id, label, mode: id, onToggle: () => onToggle(id, !on) }),
       );
+    }
+
+    /** One prompt segment card: its text, and the move/remove controls. */
+    function SegmentCard(props) {
+      const { segment, index, count, text, disabled, onText, onMove, onRemove } = props;
+      const control = (label, onClick, off, warning) => h('button', {
+        type: 'button',
+        disabled: disabled || off,
+        onClick,
+        style: {
+          padding: '2px 6px', borderRadius: '5px', font: 'inherit',
+          border: '1px solid var(--dsw-alias-border-l1)',
+          background: 'var(--dsw-alias-bg-layer-1)',
+          color: warning ? 'var(--dsw-alias-state-error-primary)' : 'var(--dsw-alias-label-primary)',
+          fontSize: '11px', lineHeight: '15px',
+          cursor: disabled || off ? 'default' : 'pointer',
+          opacity: disabled || off ? 0.5 : 1,
+        },
+      }, label);
+      return h('div', {
+        style: {
+          padding: '7px 9px', borderRadius: '8px',
+          border: '1px solid var(--dsw-alias-border-l1)',
+          background: 'var(--dsw-alias-bg-layer-1)',
+        },
+      },
+      h('div', { style: { display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' } },
+        h('span', {
+          style: { fontSize: '10px', color: 'var(--dsw-alias-label-secondary)' },
+        }, `${index + 1}/${count}`),
+        h('div', { style: { flex: '1 1 auto' } }),
+        control(text.moveUp, () => onMove(-1), index === 0),
+        control(text.moveDown, () => onMove(1), index === count - 1),
+        control(text.removeSegment, onRemove, false, true),
+      ),
+      h('textarea', {
+        value: segment.text ?? '',
+        onChange: (event) => onText(event.target.value),
+        placeholder: text.systemPromptPlaceholder,
+        maxLength: 8000,
+        rows: 3,
+        disabled,
+        style: {
+          width: '100%', boxSizing: 'border-box', padding: '7px',
+          borderRadius: '6px', border: '1px solid var(--dsw-alias-border-l1)',
+          background: 'transparent', color: 'var(--dsw-alias-label-primary)',
+          font: 'inherit', fontSize: '12px', lineHeight: '18px', resize: 'vertical',
+        },
+      }));
     }
 
     /** One bordered card. */
@@ -264,7 +317,7 @@ window.__ModuleLoader__.load({
 
       React.useEffect(() => { load(); }, [load]);
       React.useEffect(() => {
-        if (spDraft === null && state?.systemPrompt) setSpDraft(state.systemPrompt);
+        if (spDraft === null && Array.isArray(state?.systemPrompt?.segments)) setSpDraft(state.systemPrompt);
       }, [state, spDraft]);
       React.useEffect(() => {
         const timer = setInterval(() => { load(); }, 5000);
@@ -327,25 +380,49 @@ window.__ModuleLoader__.load({
       const saveSystemPrompt = async () => {
         setBusy('systemPrompt');
         try {
-          await commit({}, undefined, spDraft);
+          await commit({}, undefined, { segments: (spDraft?.segments ?? []).map((segment) => ({ text: segment.text ?? '' })) });
         } finally {
           setBusy('');
         }
       };
 
-      /** Read the currently effective default prompt into the text box as an editable draft. */
+      /** A fresh segment id; short enough for section names, unique enough for a page. */
+      const nextSegmentId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+
+      /** Patch the draft's segments array for the card column. */
+      const patchSegments = (update) => setSpDraft((draft) => ({ segments: update(draft?.segments ?? []) }));
+
+      const addSegment = () => patchSegments((segments) => [...segments, { id: nextSegmentId(), text: '' }]);
+      const setSegmentText = (id, text) => patchSegments((segments) =>
+        segments.map((segment) => segment.id === id ? { ...segment, text } : segment));
+      const removeSegment = (id) => patchSegments((segments) => segments.filter((segment) => segment.id !== id));
+      const moveSegment = (id, delta) => patchSegments((segments) => {
+        const index = segments.findIndex((segment) => segment.id === id);
+        const target = index + delta;
+        if (index === -1 || target < 0 || target >= segments.length) return segments;
+        const next = segments.slice();
+        const [segment] = next.splice(index, 1);
+        next.splice(target, 0, segment);
+        return next;
+      });
+
+      /** Read the currently effective default prompt and split it into cards. */
       const restoreSystemPrompt = async () => {
         setBusy('systemPrompt');
         try {
           const response = await fetch(PROMPT_ENDPOINT, { headers: { accept: 'application/json' } });
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
           const body = await response.json();
-          const prompt = body?.prompt ?? '';
+          const prompt = typeof body?.prompt === 'string' ? body.prompt : '';
           if (prompt === '') {
             setError(text.nothingToRead);
             return;
           }
-          setSpDraft({ mode: 'replace', text: prompt });
+          const segments = prompt.split(/\n{2,}/)
+            .map((text) => text.trim())
+            .filter((text) => text !== '')
+            .map((text) => ({ id: nextSegmentId(), text }));
+          setSpDraft({ segments });
           setError('');
         } catch (failure) {
           setError(`${text.failed}: ${String(failure?.message ?? failure)}`);
@@ -395,6 +472,7 @@ window.__ModuleLoader__.load({
       const session = state?.session ?? {};
       const tools = Array.isArray(cumulative.tools) ? cumulative.tools : [];
       const scopes = Array.isArray(state?.scopes) ? state.scopes : ['off', 'filtered', 'all'];
+      const spSegments = Array.isArray(spDraft?.segments) ? spDraft.segments : [];
 
       const group = (title, ids) => h(Card, null,
         h('div', { style: { fontSize: '12px', fontWeight: 600, marginBottom: '6px' } }, title),
@@ -487,40 +565,25 @@ window.__ModuleLoader__.load({
       h(Card, null,
         h('div', { style: { fontSize: '12px', fontWeight: 600, marginBottom: '6px' } }, text.systemPrompt),
         h(ModeRow, { id: 'systemPrompt', on: modeOf('systemPrompt'), text, busy, onToggle: toggle }),
-        h('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '6px' } },
-          Object.keys(text.systemPromptModes).map((mode) => {
-            const on = (spDraft?.mode ?? 'append') === mode;
-            return h('button', {
-              key: mode,
-              type: 'button',
-              role: 'radio',
-              'aria-checked': on ? 'true' : 'false',
-              onClick: () => setSpDraft({ mode, text: spDraft?.text ?? '' }),
-              style: {
-                padding: '3px 9px', borderRadius: '999px',
-                border: '1px solid ' + (on ? 'var(--dsw-alias-brand-primary)' : 'var(--dsw-alias-border-l1)'),
-                background: on ? 'var(--dsw-alias-bg-layer-1)' : 'transparent',
-                color: on ? 'var(--dsw-alias-label-primary)' : 'var(--dsw-alias-label-secondary)',
-                fontSize: '11px', lineHeight: '16px', font: 'inherit', cursor: 'pointer',
-              },
-            }, text.systemPromptModes[mode]);
-          }),
+        h('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '6px' } },
+          spSegments.length === 0
+            ? h('div', {
+              style: { fontSize: '11px', lineHeight: '16px', color: 'var(--dsw-alias-label-secondary)' },
+            }, text.emptySegments)
+            : spSegments.map((segment, index) => h(SegmentCard, {
+              key: segment.id ?? index,
+              segment,
+              index,
+              count: spSegments.length,
+              text,
+              disabled: !modeOf('systemPrompt'),
+              onText: (value) => setSegmentText(segment.id, value),
+              onMove: (delta) => moveSegment(segment.id, delta),
+              onRemove: () => removeSegment(segment.id),
+            })),
         ),
-        h('textarea', {
-          value: spDraft?.text ?? '',
-          onChange: (event) => setSpDraft({ mode: spDraft?.mode ?? 'append', text: event.target.value }),
-          placeholder: text.systemPromptPlaceholder,
-          maxLength: 8000,
-          rows: 6,
-          disabled: !modeOf('systemPrompt'),
-          style: {
-            width: '100%', boxSizing: 'border-box', marginTop: '6px', padding: '8px',
-            borderRadius: '6px', border: '1px solid var(--dsw-alias-border-l1)',
-            background: 'var(--dsw-alias-bg-layer-1)', color: 'var(--dsw-alias-label-primary)',
-            font: 'inherit', fontSize: '12px', lineHeight: '18px', resize: 'vertical',
-          },
-        }),
         h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px', flexWrap: 'wrap' } },
+          button(text.addSegment, () => { addSegment(); }, !modeOf('systemPrompt') || busy === 'systemPrompt'),
           button(text.saveSystemPrompt, () => { saveSystemPrompt(); }, !modeOf('systemPrompt') || busy === 'systemPrompt'),
           button(text.restoreSystemPrompt, () => { restoreSystemPrompt(); }, !modeOf('systemPrompt') || busy !== ''),
         ),

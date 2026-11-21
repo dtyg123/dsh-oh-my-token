@@ -71,11 +71,17 @@ test('state round-trips through the profile directory', () => {
   const state = {
     modes: { git: false, proseStrip: true },
     proseScope: 'all',
-    systemPrompt: { mode: 'replace', text: 'Only this.' },
+    systemPrompt: { segments: [{ text: 'First.' }, { id: 'k', text: 'Second.' }] },
   };
   const path = writeState(dir, state);
   assert.equal(path, join(dir, STATE_FILE));
   assert.deepEqual(readState(dir), state);
+});
+
+test('the old { mode, text } editor state migrates to segments on write and read', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'oh-my-token-state-'));
+  writeState(dir, { modes: {}, systemPrompt: { mode: 'append', text: 'Old text.' } });
+  assert.deepEqual(readState(dir).systemPrompt, { segments: [{ text: 'Old text.' }] });
 });
 
 test('a state file from another version is ignored, not guessed at', () => {

@@ -11,42 +11,53 @@ const assembly = () => ({
   variables: { x: '1' },
 });
 
-test('append keeps the existing sections and adds one literal tail section', () => {
+test('segments append one literal tail section per card, in order', () => {
   const input = assembly();
-  const out = applySystemPrompt(input, { enabled: true, mode: 'append', text: 'Always answer in Chinese.\nUse {{literal}}.' });
+  const out = applySystemPrompt(input, {
+    enabled: true,
+    segments: [{ text: 'Be brief.' }, { text: 'Use {{literal}}.' }],
+  });
   assert.notEqual(out, input);
-  assert.equal(out.sections.length, 2);
+  assert.equal(out.sections.length, 3);
   assert.equal(out.sections[0], input.sections[0], 'existing section keeps identity');
-  assert.equal(out.sections[1].name, SECTION_NAME);
-  assert.equal(out.sections[1].text, 'Always answer in Chinese.\nUse {{literal}}.');
+  assert.equal(out.sections[1].name, SECTION_NAME + '#0');
+  assert.equal(out.sections[1].text, 'Be brief.');
   assert.equal(out.sections[1].interpolate, false, 'braces stay literal');
-  assert.ok(out.sections[1].order > 0);
+  assert.ok(out.sections[2].order > out.sections[1].order, 'card order mirrors prompt order');
+  assert.equal(out.sections[2].text, 'Use {{literal}}.');
   assert.equal(out.contexts, input.contexts, 'runtime context is untouched');
   assert.equal(out.variables, input.variables);
 });
 
-test('replace swaps the whole section list for the custom text', () => {
+test('empty, whitespace-only, or missing segments are skipped', () => {
   const input = assembly();
-  const out = applySystemPrompt(input, { enabled: true, mode: 'replace', text: 'Only this.' });
-  assert.equal(out.sections.length, 1);
-  assert.equal(out.sections[0].text, 'Only this.');
-  assert.equal(input.sections.length, 1, 'source assembly is untouched');
+  const out = applySystemPrompt(input, {
+    enabled: true,
+    segments: [{ text: 'Keep.' }, { text: '   \n' }, undefined, { id: 'x', text: '' }],
+  });
+  assert.equal(out.sections.length, 2);
+  assert.equal(out.sections[1].text, 'Keep.');
 });
 
 test('a disabled or empty editor is a no-op', () => {
   const input = assembly();
-  assert.equal(applySystemPrompt(input, { enabled: false, mode: 'append', text: 'x' }), input);
-  assert.equal(applySystemPrompt(input, { enabled: true, mode: 'append', text: '   \n' }), input);
+  assert.equal(applySystemPrompt(input, { enabled: false, segments: [{ text: 'x' }] }), input);
+  assert.equal(applySystemPrompt(input, { enabled: true, segments: [] }), input);
   assert.equal(applySystemPrompt(input, undefined), input);
 });
 
-test('sanitizing keeps only known modes and bounded text', () => {
-  assert.deepEqual(emptySystemPrompt(), { mode: 'append', text: '' });
-  assert.deepEqual(sanitizeSystemPrompt({ mode: 'replace', text: 'ok' }), { mode: 'replace', text: 'ok' });
-  assert.deepEqual(sanitizeSystemPrompt({ mode: 'bogus', text: 'ok' }), { mode: 'append', text: 'ok' });
+test('sanitizing accepts segments and migrates the old { mode, text } shape', () => {
+  assert.deepEqual(emptySystemPrompt(), { segments: [] });
+  assert.deepEqual(sanitizeSystemPrompt({ segments: [{ text: 'a' }, { id: 'k', text: 'b' }] }),
+    { segments: [{ text: 'a' }, { id: 'k', text: 'b' }] });
+  assert.deepEqual(sanitizeSystemPrompt({ mode: 'replace', text: 'Only this.' }), { segments: [{ text: 'Only this.' }] });
+  assert.deepEqual(sanitizeSystemPrompt({ mode: 'bogus', text: 'ok' }), { segments: [{ text: 'ok' }] });
+  assert.deepEqual(sanitizeSystemPrompt({ segments: [{ text: 5 }, null, { id: '', text: 'x' }] }),
+    { segments: [{ text: '' }, { text: 'x' }] });
   assert.deepEqual(sanitizeSystemPrompt({ text: 5 }), undefined);
   assert.deepEqual(sanitizeSystemPrompt(null), undefined);
-  assert.equal(sanitizeSystemPrompt({ text: 'x'.repeat(MAX_SYSTEM_PROMPT_CHARS + 50) }).text.length, MAX_SYSTEM_PROMPT_CHARS);
+  const long = sanitizeSystemPrompt({ segments: [{ text: 'x'.repeat(MAX_SYSTEM_PROMPT_CHARS + 50) }] });
+  assert.equal(long.segments[0].text.length, MAX_SYSTEM_PROMPT_CHARS);
 });
 
 test('renderPreviewPrompt interpolates known variables and keeps unknown ones literal', () => {

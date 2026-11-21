@@ -76,19 +76,19 @@ Three exact routes back the page: `/dsh-oh-my-token/state`, `/dsh-oh-my-token/st
 
 ## 系统提示词 / System prompt
 
-在「设置 → 省 Token」底部的「系统提示词」卡片里，打开开关、选择「追加到末尾」或「整体替换」、填入文本并保存。文本通过 DSH 官方的 `system-prompt/assemble` 水面注入：
+在「设置 → 省 Token」底部的「系统提示词」卡片里，打开开关，把你要追加的内容拆成若干个**小段（卡片）**：每张卡片一小段正文，点击「添加一小段」新增，「上移 / 下移」调整顺序，「删除这一段」移除。保存后，所有卡片按从上到下的顺序**拼合成的最终系统提示词**追加到现有 section 之后。保存时旧版 `{ mode, text }` 配置自动迁移为单卡片。
 
-- **追加**：保留原有所有 section，在末尾加一个 `interpolate: false` 的 section——文本里的 `{{...}}` 保持字面量，不会被当作未知变量而报错；
-- **整体替换**：只保留你写的那一段；
+- 每段一个 `interpolate: false` 的 section——文本里的 `{{...}}` 保持字面量，不会被当作未知变量而报错；
+- 卡片顺序即提示词顺序；
 - 运行时上下文快照不受影响；改动在下一次请求生效，无需重启。
-- 「恢复默认提示词」：立即按当前注册实时组装一份系统提示词（首次使用、未发过消息也能读到），**预填**进文本框作为可编辑草稿——方便在原默认内容上重新改写；读到的始终是未注入定制文本的原始提示词。
+- 「恢复默认提示词」：立即按当前注册实时组装一份系统提示词（首次使用、未发过消息也能读到），按空行**拆成多张卡片**放进编辑器，方便在原默认内容上重新改写；读到的始终是未注入定制文本的原始提示词。
 
-At the bottom of Settings → 省 Token, the 系统提示词 card lets you enable the switch, pick append or replace, type text, and save. The text is injected through DSH's official `system-prompt/assemble` waterfall:
+At the bottom of Settings → 省 Token, the 系统提示词 card lets you enable the switch and split what you want appended into **segment cards** — each card is one piece of prose; "添加一小段" adds a card, "上移 / 下移" reorder, "删除这一段" removes it. On save, all cards are **joined top-to-bottom into the final system prompt** and appended after the existing sections. The old `{ mode, text }` config migrates to a single card automatically.
 
-- **append** keeps every existing section and adds one `interpolate: false` section at the end — `{{...}}` in your text stays literal instead of throwing as an unknown variable;
-- **replace** keeps only your text;
+- each card becomes its own `interpolate: false` section — `{{...}}` in your text stays literal instead of throwing as an unknown variable;
+- card order is prompt order;
 - runtime context snapshots are untouched, and changes apply on the next request with no restart.
-- 「恢复默认提示词」live-assembles the currently effective system prompt — readable from the very first use, before any message is sent — and **pre-fills** the text box as an editable draft, so you can rewrite on top of the default. It always reads the original prompt without your injected text.
+- 「恢复默认提示词」live-assembles the currently effective system prompt — readable from the very first use, before any message is sent — and **splits it into cards** on the blank-line boundaries, so you can rewrite on top of the default. It always reads the original prompt without your injected text.
 
 ## 配置 / Configuration
 

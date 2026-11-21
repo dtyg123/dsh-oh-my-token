@@ -162,7 +162,7 @@ test('GET state lists every switch and the prose scope', async () => {
   assert.equal(state.modes.find((mode) => mode.id === 'systemPrompt').on, false);
   assert.equal(state.proseScope, 'filtered');
   assert.deepEqual(state.scopes, ['off', 'filtered', 'all']);
-  assert.deepEqual(state.systemPrompt, { mode: 'append', text: '' });
+  assert.deepEqual(state.systemPrompt, { segments: [] });
   assert.equal(state.cumulative.savedChars, 0);
 });
 
@@ -316,7 +316,7 @@ test('llm/stream strips the reply block-end and records the savings', async () =
   assert.equal(response.json().session.savedChars, 1);
 });
 
-test('system-prompt/assemble is a no-op until the switch and text are set', async () => {
+test('system-prompt/assemble appends the segments in order once the switch is on', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'oh-my-token-'));
   const { listeners, routes } = mount({}, { profileDir: dir });
   const handler = listeners.get('system-prompt/assemble');
@@ -327,17 +327,19 @@ test('system-prompt/assemble is a no-op until the switch and text are set', asyn
   const response = fakeResponse();
   await routes.get('/dsh-oh-my-token/state').handler(postReq({
     modes: { systemPrompt: true },
-    systemPrompt: { mode: 'replace', text: 'Only this.' },
+    systemPrompt: { segments: [{ id: 'a', text: 'First.' }, { text: 'Second.' }] },
   }), response);
   assert.equal(response.status, 200);
 
-  const replaced = await assembled(assembly);
-  assert.equal(replaced.sections.length, 1);
-  assert.equal(replaced.sections[0].text, 'Only this.');
-  assert.equal(replaced.sections[0].interpolate, false);
+  const appended = await assembled(assembly);
+  assert.equal(appended.sections.length, 3);
+  assert.equal(appended.sections[1].text, 'First.');
+  assert.equal(appended.sections[2].text, 'Second.');
+  assert.ok(appended.sections[1].order < appended.sections[2].order);
+  assert.equal(appended.sections[1].interpolate, false);
 
   const written = JSON.parse(readFileSync(join(dir, 'dsh-oh-my-token.state.json'), 'utf8'));
-  assert.deepEqual(written.systemPrompt, { mode: 'replace', text: 'Only this.' });
+  assert.deepEqual(written.systemPrompt, { segments: [{ id: 'a', text: 'First.' }, { text: 'Second.' }] });
 });
 
 test('an empty patch is rejected when it carries no systemPrompt either', async () => {
@@ -382,9 +384,10 @@ test('the system-prompt/assemble listener skips its edit for preview assemblies'
   const assembly = { sections: [{ name: 'persona', text: 'Be brief.' }], contexts: [], variables: {} };
   await routes.get('/dsh-oh-my-token/state').handler(postReq({
     modes: { systemPrompt: true },
-    systemPrompt: { mode: 'replace', text: 'Only this.' },
+    systemPrompt: { segments: [{ text: 'Only this.' }] },
   }), fakeResponse());
   assert.equal(await handler(assembly, { preview: true }, async () => assembly), assembly);
-  const replaced = await handler(assembly, {}, async () => assembly);
-  assert.equal(replaced.sections[0].text, 'Only this.');
+  const appended = await handler(assembly, {}, async () => assembly);
+  assert.equal(appended.sections.length, 2);
+  assert.equal(appended.sections[1].text, 'Only this.');
 });
