@@ -360,7 +360,14 @@ window.__ModuleLoader__.load({
 
       React.useEffect(() => { load(); }, [load]);
       React.useEffect(() => {
-        if (spDraft === null && Array.isArray(state?.systemPrompt?.segments)) setSpDraft(state.systemPrompt);
+        if (spDraft === null && Array.isArray(state?.systemPrompt?.segments)) {
+          // Loaded cards may predate the id-bearing editor; give every card a
+          // stable key so reorder/edit/remove target the right one.
+          setSpDraft({ segments: state.systemPrompt.segments.map((segment, index) => ({
+            ...segment,
+            id: segment.id ?? `seg-${index}-${Date.now().toString(36)}`,
+          })) });
+        }
       }, [state, spDraft]);
       React.useEffect(() => {
         if (cfgDraft === null && state?.config) setCfgDraft(state.config);
@@ -439,13 +446,12 @@ window.__ModuleLoader__.load({
       const patchSegments = (update) => setSpDraft((draft) => ({ segments: update(draft?.segments ?? []) }));
 
       const addSegment = () => patchSegments((segments) => [...segments, { id: nextSegmentId(), text: '' }]);
-      const setSegmentText = (id, text) => patchSegments((segments) =>
-        segments.map((segment) => segment.id === id ? { ...segment, text } : segment));
-      const removeSegment = (id) => patchSegments((segments) => segments.filter((segment) => segment.id !== id));
-      const moveSegment = (id, delta) => patchSegments((segments) => {
-        const index = segments.findIndex((segment) => segment.id === id);
+      const setSegmentText = (index, text) => patchSegments((segments) =>
+        segments.map((segment, i) => (i === index ? { ...segment, text } : segment)));
+      const removeSegment = (index) => patchSegments((segments) => segments.filter((_, i) => i !== index));
+      const moveSegment = (index, delta) => patchSegments((segments) => {
         const target = index + delta;
-        if (index === -1 || target < 0 || target >= segments.length) return segments;
+        if (index < 0 || index >= segments.length || target < 0 || target >= segments.length) return segments;
         const next = segments.slice();
         const [segment] = next.splice(index, 1);
         next.splice(target, 0, segment);
@@ -712,9 +718,9 @@ window.__ModuleLoader__.load({
               count: spSegments.length,
               text,
               disabled: !modeOf('systemPrompt'),
-              onText: (value) => setSegmentText(segment.id, value),
-              onMove: (delta) => moveSegment(segment.id, delta),
-              onRemove: () => removeSegment(segment.id),
+              onText: (value) => setSegmentText(index, value),
+              onMove: (delta) => moveSegment(index, delta),
+              onRemove: () => removeSegment(index),
             })),
         ),
         h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px', flexWrap: 'wrap' } },
