@@ -1,7 +1,7 @@
 {
   "name": "dsh-oh-my-token",
-  "version": "0.2.4",
-  "description": "Native token admission for DeepSeek Harness: command-output filters, retrieval-style reads, a conservative prose trimmer, and a settings page that reports what was saved. No RTK binary, no codegraph server.",
+  "version": "0.2.5",
+  "description": "Native token admission for DeepSeek Harness: command-output filters, retrieval-style reads, a conservative prose trimmer, optional system-prompt editing, and a settings page that reports what was saved. No RTK binary, no codegraph server.",
   "type": "module",
   "main": "./index.js",
   "exports": {
@@ -32,7 +32,7 @@
   },
   "meta": {
     "title": "Oh My Token",
-    "description": "Compresses command output at the source, outlines large reads instead of pasting them, and trims sentence-final periods from prose. Every transform has a switch on one Settings page, which also reports what was saved."
+    "description": "Compresses command output at the source, outlines large reads instead of pasting them, trims sentence-final periods from prose, and can append to or replace the system prompt. Every transform has a switch on one Settings page, which also reports what was saved."
   },
   "dsh": {
     "engines": {

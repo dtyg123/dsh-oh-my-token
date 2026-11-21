@@ -89,9 +89,9 @@ test('identity', () => {
   assert.deepEqual(inject, ['tools']);
 });
 
-test('registers its three listeners and two routes', () => {
+test('registers its four listeners and two routes', () => {
   const { listeners, routes, infos } = mount({});
-  assert.deepEqual([...listeners.keys()], ['tools/post-execute', 'agent/pre-step', 'llm/stream']);
+  assert.deepEqual([...listeners.keys()], ['tools/post-execute', 'agent/pre-step', 'system-prompt/assemble', 'llm/stream']);
   assert.deepEqual([...routes.keys()], ['/dsh-oh-my-token/state', '/dsh-oh-my-token/stats']);
   assert.equal(infos.length, 1);
 });
@@ -156,11 +156,13 @@ test('GET state lists every switch and the prose scope', async () => {
   const state = response.json();
   assert.equal(response.status, 200);
   assert.deepEqual(state.modes.map((mode) => mode.id), [
-    'pytest', 'git', 'tsc', 'packageManager', 'generic', 'readOutline', 'grepCap', 'proseStrip',
+    'pytest', 'git', 'tsc', 'packageManager', 'generic', 'readOutline', 'grepCap', 'proseStrip', 'systemPrompt',
   ]);
-  assert.ok(state.modes.every((mode) => mode.on === true));
+  assert.ok(state.modes.filter((mode) => mode.id !== 'systemPrompt').every((mode) => mode.on === true));
+  assert.equal(state.modes.find((mode) => mode.id === 'systemPrompt').on, false);
   assert.equal(state.proseScope, 'filtered');
   assert.deepEqual(state.scopes, ['off', 'filtered', 'all']);
+  assert.deepEqual(state.systemPrompt, { mode: 'append', text: '' });
   assert.equal(state.cumulative.savedChars, 0);
 });
 
@@ -312,4 +314,35 @@ test('llm/stream strips the reply block-end and records the savings', async () =
   await routes.get('/dsh-oh-my-token/stats').handler({ method: 'GET' }, response);
   assert.equal(response.json().session.messages, 1);
   assert.equal(response.json().session.savedChars, 1);
+});
+
+test('system-prompt/assemble is a no-op until the switch and text are set', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'oh-my-token-'));
+  const { listeners, routes } = mount({}, { profileDir: dir });
+  const handler = listeners.get('system-prompt/assemble');
+  const assembly = { sections: [{ name: 'persona', text: 'Be brief.' }], contexts: [], variables: {} };
+  const assembled = (input) => handler(input, {}, async () => input);
+
+  assert.equal(await assembled(assembly), assembly, 'off by default');
+  const response = fakeResponse();
+  await routes.get('/dsh-oh-my-token/state').handler(postReq({
+    modes: { systemPrompt: true },
+    systemPrompt: { mode: 'replace', text: 'Only this.' },
+  }), response);
+  assert.equal(response.status, 200);
+
+  const replaced = await assembled(assembly);
+  assert.equal(replaced.sections.length, 1);
+  assert.equal(replaced.sections[0].text, 'Only this.');
+  assert.equal(replaced.sections[0].interpolate, false);
+
+  const written = JSON.parse(readFileSync(join(dir, 'dsh-oh-my-token.state.json'), 'utf8'));
+  assert.deepEqual(written.systemPrompt, { mode: 'replace', text: 'Only this.' });
+});
+
+test('an empty patch is rejected when it carries no systemPrompt either', async () => {
+  const { routes } = mount({});
+  const response = fakeResponse();
+  await routes.get('/dsh-oh-my-token/state').handler(postReq({ modes: {} }), response);
+  assert.equal(response.status, 400);
 });

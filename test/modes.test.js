@@ -68,9 +68,14 @@ test('two candidate profiles mean no directory at all', () => {
 test('state round-trips through the profile directory', () => {
   const dir = mkdtempSync(join(tmpdir(), 'oh-my-token-state-'));
   assert.equal(readState(dir), undefined);
-  const path = writeState(dir, { modes: { git: false, proseStrip: true }, proseScope: 'all' });
+  const state = {
+    modes: { git: false, proseStrip: true },
+    proseScope: 'all',
+    systemPrompt: { mode: 'replace', text: 'Only this.' },
+  };
+  const path = writeState(dir, state);
   assert.equal(path, join(dir, STATE_FILE));
-  assert.deepEqual(readState(dir), { modes: { git: false, proseStrip: true }, proseScope: 'all' });
+  assert.deepEqual(readState(dir), state);
 });
 
 test('a state file from another version is ignored, not guessed at', () => {

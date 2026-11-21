@@ -61,7 +61,7 @@ To change a budget, add the field under that row in the profile's `cordis.patch.
 
 **设置 → 省 Token**（**Settings → 省 Token**）是管理面板：
 
-- 每个变换一个开关（5 个命令过滤器、2 个检索变换、句号剥离器）；One switch per transform (5 command filters, 2 retrieval transforms, the period trimmer);
+- 每个变换一个开关（5 个命令过滤器、2 个检索变换、句号剥离器、系统提示词编辑）；One switch per transform (5 command filters, 2 retrieval transforms, the period trimmer, the system-prompt editor);
 - 句号剥离器的三档范围（`off` / 仅散文输出 / 所有散文）；A three-way scope for the period trimmer (`off` / prose outputs only / all prose);
 - 节省记录：本次进程与历史累计、移除的 token 与字符、节省比例、按工具明细表，以及消息/回复剥离计数；The savings record: this process and all time, tokens and characters removed, the saved share, a per-tool table, and a message/reply strip count;
 - 选择被写入的配置目录，方便确认开关是否真的落盘。The profile directory the choice is written to, so you can see whether a switch actually persisted.
@@ -73,6 +73,20 @@ Changes apply on the next tool call — no restart. The choice is written to `ds
 页面由两条精确路由支撑：`/dsh-oh-my-token/state` 与 `/dsh-oh-my-token/stats`。
 
 Two exact routes back the page: `/dsh-oh-my-token/state` and `/dsh-oh-my-token/stats`.
+
+## 系统提示词 / System prompt
+
+在「设置 → 省 Token」底部的「系统提示词」卡片里，打开开关、选择「追加到末尾」或「整体替换」、填入文本并保存。文本通过 DSH 官方的 `system-prompt/assemble` 水面注入：
+
+- **追加**：保留原有所有 section，在末尾加一个 `interpolate: false` 的 section——文本里的 `{{...}}` 保持字面量，不会被当作未知变量而报错；
+- **整体替换**：只保留你写的那一段；
+- 运行时上下文快照不受影响；改动在下一次请求生效，无需重启。
+
+At the bottom of Settings → 省 Token, the 系统提示词 card lets you enable the switch, pick append or replace, type text, and save. The text is injected through DSH's official `system-prompt/assemble` waterfall:
+
+- **append** keeps every existing section and adds one `interpolate: false` section at the end — `{{...}}` in your text stays literal instead of throwing as an unknown variable;
+- **replace** keeps only your text;
+- runtime context snapshots are untouched, and changes apply on the next request with no restart.
 
 ## 配置 / Configuration
 

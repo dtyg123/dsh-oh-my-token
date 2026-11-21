@@ -58,6 +58,11 @@ window.__ModuleLoader__.load({
         filtered: '仅散文输出',
         all: '所有散文',
       },
+      systemPrompt: '系统提示词',
+      systemPromptHint: '把你写的文本加入系统提示词：追加到末尾，或整体替换。{{变量}} 保持字面量。保存后下一次请求生效。',
+      systemPromptModes: { append: '追加到末尾', replace: '整体替换' },
+      systemPromptPlaceholder: '在这里写下要发送给模型的系统提示词…',
+      saveSystemPrompt: '保存系统提示词',
       modes: {
         pytest: ['pytest 结果', '通过时只留一行结论；失败时保留 FAILED、断言与摘要'],
         git: ['git 输出', 'status 干净时折叠成一行，diff 只留文件头和变更行'],
@@ -67,6 +72,7 @@ window.__ModuleLoader__.load({
         readOutline: ['大文件大纲', '超过行数阈值且没给 offset/limit 的 read 只返回符号大纲'],
         grepCap: ['搜索结果截断', '匹配过多时只留前 N 条并说明剩余数量'],
         proseStrip: ['删除句末句号', '删除散文行、你的输入与助手回复（含历史消息）末尾的一个句号，省下每个句子的一个 token'],
+        systemPrompt: ['修改系统提示词', '把你写的文本加入或替换系统提示词'],
       },
       file: '配置目录',
       none: '未找到配置目录，改动不会落盘',
@@ -240,6 +246,7 @@ window.__ModuleLoader__.load({
       const [error, setError] = React.useState('');
       const [busy, setBusy] = React.useState('');
       const [confirming, setConfirming] = React.useState(false);
+      const [spDraft, setSpDraft] = React.useState(null);
 
       const load = React.useCallback(async () => {
         try {
@@ -254,6 +261,9 @@ window.__ModuleLoader__.load({
 
       React.useEffect(() => { load(); }, [load]);
       React.useEffect(() => {
+        if (spDraft === null && state?.systemPrompt) setSpDraft(state.systemPrompt);
+      }, [state, spDraft]);
+      React.useEffect(() => {
         const timer = setInterval(() => { load(); }, 5000);
         return () => { clearInterval(timer); };
       }, [load]);
@@ -262,13 +272,14 @@ window.__ModuleLoader__.load({
        * Send one patch and adopt the Host's answer. The switch moves at once
        * and reverts on failure, so the page never disagrees with the policy.
        */
-      const commit = async (patch, proseScope) => {
+      const commit = async (patch, proseScope, systemPrompt) => {
         const previous = state;
         setState((current) => {
           if (current === null) return current;
           return {
             ...current,
             proseScope: proseScope === undefined ? current.proseScope : proseScope,
+            systemPrompt: systemPrompt === undefined ? current.systemPrompt : systemPrompt,
             modes: current.modes.map((mode) => (Object.hasOwn(patch, mode.id) ? { ...mode, on: patch[mode.id] } : mode)),
           };
         });
@@ -276,7 +287,11 @@ window.__ModuleLoader__.load({
           const response = await fetch(STATE_ENDPOINT, {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
-            body: JSON.stringify(proseScope === undefined ? { modes: patch } : { modes: patch, proseScope }),
+            body: JSON.stringify({
+              modes: patch,
+              ...(proseScope === undefined ? {} : { proseScope }),
+              ...(systemPrompt === undefined ? {} : { systemPrompt }),
+            }),
           });
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
           const body = await response.json();
@@ -301,6 +316,15 @@ window.__ModuleLoader__.load({
         setBusy('scope');
         try {
           await commit({}, scope);
+        } finally {
+          setBusy('');
+        }
+      };
+
+      const saveSystemPrompt = async () => {
+        setBusy('systemPrompt');
+        try {
+          await commit({}, undefined, spDraft);
         } finally {
           setBusy('');
         }
@@ -435,6 +459,52 @@ window.__ModuleLoader__.load({
             color: 'var(--dsw-alias-label-secondary)',
           },
         }, text.proseHint),
+      ),
+      h(Card, null,
+        h('div', { style: { fontSize: '12px', fontWeight: 600, marginBottom: '6px' } }, text.systemPrompt),
+        h(ModeRow, { id: 'systemPrompt', on: modeOf('systemPrompt'), text, busy, onToggle: toggle }),
+        h('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '6px' } },
+          Object.keys(text.systemPromptModes).map((mode) => {
+            const on = (spDraft?.mode ?? 'append') === mode;
+            return h('button', {
+              key: mode,
+              type: 'button',
+              role: 'radio',
+              'aria-checked': on ? 'true' : 'false',
+              onClick: () => setSpDraft({ mode, text: spDraft?.text ?? '' }),
+              style: {
+                padding: '3px 9px', borderRadius: '999px',
+                border: '1px solid ' + (on ? 'var(--dsw-alias-brand-primary)' : 'var(--dsw-alias-border-l1)'),
+                background: on ? 'var(--dsw-alias-bg-layer-1)' : 'transparent',
+                color: on ? 'var(--dsw-alias-label-primary)' : 'var(--dsw-alias-label-secondary)',
+                fontSize: '11px', lineHeight: '16px', font: 'inherit', cursor: 'pointer',
+              },
+            }, text.systemPromptModes[mode]);
+          }),
+        ),
+        h('textarea', {
+          value: spDraft?.text ?? '',
+          onChange: (event) => setSpDraft({ mode: spDraft?.mode ?? 'append', text: event.target.value }),
+          placeholder: text.systemPromptPlaceholder,
+          maxLength: 8000,
+          rows: 6,
+          disabled: !modeOf('systemPrompt'),
+          style: {
+            width: '100%', boxSizing: 'border-box', marginTop: '6px', padding: '8px',
+            borderRadius: '6px', border: '1px solid var(--dsw-alias-border-l1)',
+            background: 'var(--dsw-alias-bg-layer-1)', color: 'var(--dsw-alias-label-primary)',
+            font: 'inherit', fontSize: '12px', lineHeight: '18px', resize: 'vertical',
+          },
+        }),
+        h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px', flexWrap: 'wrap' } },
+          button(text.saveSystemPrompt, () => { saveSystemPrompt(); }, !modeOf('systemPrompt') || busy === 'systemPrompt'),
+        ),
+        h('div', {
+          style: {
+            marginTop: '6px', fontSize: '11px', lineHeight: '16px',
+            color: 'var(--dsw-alias-label-secondary)',
+          },
+        }, text.systemPromptHint),
       ),
       h(Card, null,
         h('div', { style: { fontSize: '12px', fontWeight: 600, marginBottom: '4px' } }, text.byTool),

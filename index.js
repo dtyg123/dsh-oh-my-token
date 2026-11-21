@@ -34,6 +34,7 @@
 import { resolveConfig } from './lib/config.js';
 import { compressToolResult, normalizeDecision } from './lib/gate.js';
 import { stripAssistantStream, stripClaimedMessages, stripHistoryMessages } from './lib/messages.js';
+import { applySystemPrompt, emptySystemPrompt, sanitizeSystemPrompt } from './lib/system-prompt.js';
 import {
   MODE_IDS, PROSE_SCOPES, effectiveConfig, readState, resolveModes, sanitizeModePatch,
   sanitizeScope, stateDirectory, writeState,
@@ -87,6 +88,7 @@ export function apply(ctx, config) {
   const state = {
     modes: { ...resolveModes(row), ...(persisted?.modes ?? {}) },
     proseScope: persisted?.proseScope ?? row.prose.scope,
+    systemPrompt: persisted?.systemPrompt ?? emptySystemPrompt(),
   };
   // A single object the gate reads on every call; a switch replaces its
   // contents rather than rebuilding the listener.
@@ -115,6 +117,7 @@ export function apply(ctx, config) {
     modes: MODE_IDS.map((id) => ({ id, on: state.modes[id] !== false })),
     proseScope: state.proseScope,
     scopes: PROSE_SCOPES,
+    systemPrompt: state.systemPrompt,
     profileDir: profileDir ?? null,
     session: summarize(session),
     cumulative: summarize(cumulative),
@@ -205,6 +208,14 @@ export function apply(ctx, config) {
     return messages === decision.messages ? decision : { ...decision, messages };
   });
 
+  // The official prompt seam: one extra section appended to, or replacing,
+  // the assembled system prompt. Context sections are left alone.
+  ctx.on('system-prompt/assemble', async (assembly, _context, next) => {
+    const result = await next();
+    if (state.modes.systemPrompt !== true) return result;
+    return applySystemPrompt(result, { enabled: true, ...state.systemPrompt });
+  });
+
   // Wrap the LLM chunk stream at the outermost waterfall position. The
   // `block-end` text is what the assembler uses for the assistant message and
   // what the durable stream records, so rewriting it here covers both.
@@ -237,12 +248,14 @@ export function apply(ctx, config) {
           const body = await readJsonBody(request);
           const patch = sanitizeModePatch(body?.modes);
           const scope = sanitizeScope(body?.proseScope);
-          if (Object.keys(patch).length === 0 && scope === undefined) {
-            sendJson(response, 400, { error: 'no valid switch values in "modes" and no "proseScope"' });
+          const systemPrompt = sanitizeSystemPrompt(body?.systemPrompt);
+          if (Object.keys(patch).length === 0 && scope === undefined && systemPrompt === undefined) {
+            sendJson(response, 400, { error: 'no valid switch values in "modes", no "proseScope" and no "systemPrompt"' });
             return;
           }
           Object.assign(state.modes, patch);
           if (scope !== undefined) state.proseScope = scope;
+          if (systemPrompt !== undefined) state.systemPrompt = systemPrompt;
           Object.assign(policy, effectiveConfig(row, state));
           const path = writeState(profileDir, state);
           ctx.logger.info(
