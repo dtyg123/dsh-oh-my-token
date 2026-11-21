@@ -62,6 +62,31 @@ window.__ModuleLoader__.load({
       systemPrompt: '系统提示词',
       systemPromptHint: '把提示词拆成若干小段（卡片），从上到下按顺序拼到现有系统提示词末尾，保存后下一次请求生效。',
       systemPromptVariables: '{{变量}}：{{provider}} 会替换为当前模型供应商、{{model}} 替换为当前模型名；写其他写法不替换，保持字面量，也不会因此报错。',
+      advanced: '高级配置',
+      advancedHint: '数字与枚举项改完点「保存配置」；开关立即生效。',
+      saveConfig: '保存配置',
+      enabled: '启用插件',
+      enabledHint: '关闭后所有变换停止，设置保留。',
+      recovery: '超预算处理',
+      recoveryHint: 'spill 保存全文并给取回标记；rerun 提示重跑；none 不截断。',
+      recoveryOptions: {
+        spill: 'spill（保存全文）',
+        rerun: 'rerun（提示重跑）',
+        none: 'none（不截断）',
+      },
+      fields: {
+        'budgets.default': '默认字符上限',
+        'budgets.read': 'read 字符上限',
+        'budgets.grep': 'grep 字符上限',
+        'budgets.bash': 'bash 字符上限',
+        'budgets.errorFactor': '错误结果倍数',
+        minChars: '最小改写字符',
+        minGain: '最小节省比例',
+        'retrieval.readOutlineOverLines': '大纲行数阈值',
+        'retrieval.maxOutlineSymbols': '大纲符号上限',
+        'retrieval.maxGrepMatches': 'grep 匹配上限',
+        logEvery: '每 N 次打印日志',
+      },
       systemPromptPlaceholder: '写下这一段的提示词…',
       addSegment: '添加一小段',
       moveUp: '上移',
@@ -91,6 +116,21 @@ window.__ModuleLoader__.load({
 
     /** A finite, non-negative number from any wire value. */
     const number = (value) => (typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0);
+
+    /** Numeric rows the advanced card edits, in display order, with their step. */
+    const CFG_FIELDS = [
+      ['budgets.default', '1'],
+      ['budgets.read', '1'],
+      ['budgets.grep', '1'],
+      ['budgets.bash', '1'],
+      ['budgets.errorFactor', '0.1'],
+      ['minChars', '1'],
+      ['minGain', '0.01'],
+      ['retrieval.readOutlineOverLines', '1'],
+      ['retrieval.maxOutlineSymbols', '1'],
+      ['retrieval.maxGrepMatches', '1'],
+      ['logEvery', '1'],
+    ];
 
     /** A token count at a glance: 1234 -> 1,234, 23456 -> 23.5k. */
     const compact = (value) => {
@@ -305,6 +345,7 @@ window.__ModuleLoader__.load({
       const [busy, setBusy] = React.useState('');
       const [confirming, setConfirming] = React.useState(false);
       const [spDraft, setSpDraft] = React.useState(null);
+      const [cfgDraft, setCfgDraft] = React.useState(null);
 
       const load = React.useCallback(async () => {
         try {
@@ -321,6 +362,9 @@ window.__ModuleLoader__.load({
       React.useEffect(() => {
         if (spDraft === null && Array.isArray(state?.systemPrompt?.segments)) setSpDraft(state.systemPrompt);
       }, [state, spDraft]);
+      React.useEffect(() => {
+        if (cfgDraft === null && state?.config) setCfgDraft(state.config);
+      }, [state, cfgDraft]);
       React.useEffect(() => {
         const timer = setInterval(() => { load(); }, 5000);
         return () => { clearInterval(timer); };
@@ -453,6 +497,57 @@ window.__ModuleLoader__.load({
         }
       };
 
+      /** Read a dotted config path from the draft. */
+      const cfgGet = (path) => path.split('.').reduce((node, key) => (node == null ? undefined : node[key]), cfgDraft ?? {});
+      /** Write a dotted config path into a copy of the draft. */
+      const cfgSet = (path, value) => setCfgDraft((draft) => {
+        const next = { ...(draft ?? {}) };
+        const keys = path.split('.');
+        let node = next;
+        for (let i = 0; i < keys.length - 1; i += 1) {
+          node[keys[i]] = { ...(node[keys[i]] ?? {}) };
+          node = node[keys[i]];
+        }
+        node[keys[keys.length - 1]] = value;
+        return next;
+      });
+
+      const postState = async (payload) => {
+        const response = await fetch(STATE_ENDPOINT, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const body = await response.json();
+        setState((current) => ({ ...current, ...body }));
+        setError('');
+        return body;
+      };
+
+      const saveConfig = async () => {
+        setBusy('config');
+        try {
+          const body = await postState({ config: cfgDraft });
+          setCfgDraft(body.config);
+        } catch (failure) {
+          setError(`${text.failed}: ${String(failure?.message ?? failure)}`);
+        } finally {
+          setBusy('');
+        }
+      };
+
+      const toggleEnabled = async () => {
+        setBusy('enabled');
+        try {
+          await postState({ enabled: state?.enabled !== true });
+        } catch (failure) {
+          setError(`${text.failed}: ${String(failure?.message ?? failure)}`);
+        } finally {
+          setBusy('');
+        }
+      };
+
       const button = (label, onClick, disabled) => h('button', {
         type: 'button',
         disabled: disabled === true,
@@ -519,6 +614,44 @@ window.__ModuleLoader__.load({
       h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '12px' } },
         h(ScopeCard, { title: text.session, summary: session, text }),
         h(ScopeCard, { title: text.cumulative, summary: cumulative, text }),
+      ),
+      h(Card, null,
+        h('div', { style: { display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px' } },
+          h('span', { style: { fontSize: '12px', fontWeight: 600 } }, text.advanced),
+          h('span', { style: { fontSize: '10px', color: 'var(--dsw-alias-label-secondary)' } }, text.advancedHint)),
+        h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px' } },
+          h(Switch, {
+            on: state?.enabled !== false, label: text.enabled, mode: 'enabled',
+            disabled: busy === 'enabled', onToggle: toggleEnabled,
+          }),
+          h('span', { style: { fontSize: '11px', color: 'var(--dsw-alias-label-secondary)' } }, text.enabledHint)),
+        h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '6px', marginTop: '8px' } },
+          CFG_FIELDS.map(([path, step]) => h('label', {
+            key: path,
+            style: { display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '11px', color: 'var(--dsw-alias-label-secondary)' },
+          },
+          text.fields[path] ?? path,
+          h('input', {
+            type: 'number', value: cfgGet(path) ?? '', step, min: 0, disabled: busy === 'config',
+            onChange: (event) => cfgSet(path, event.target.value === '' ? '' : Number(event.target.value)),
+            style: {
+              padding: '3px 6px', borderRadius: '5px', border: '1px solid var(--dsw-alias-border-l1)',
+              background: 'transparent', color: 'var(--dsw-alias-label-primary)', font: 'inherit', fontSize: '12px',
+            },
+          })))),
+        h('label', { style: { display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '11px', color: 'var(--dsw-alias-label-secondary)', marginTop: '8px' } },
+          text.recovery,
+          h('select', {
+            value: cfgGet('recovery') ?? 'spill', disabled: busy === 'config',
+            onChange: (event) => cfgSet('recovery', event.target.value),
+            style: {
+              padding: '3px 6px', borderRadius: '5px', border: '1px solid var(--dsw-alias-border-l1)',
+              background: 'transparent', color: 'var(--dsw-alias-label-primary)', font: 'inherit', fontSize: '12px', maxWidth: '260px',
+            },
+          }, Object.entries(text.recoveryOptions).map(([value, label]) => h('option', { key: value, value }, label)))),
+        h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px', flexWrap: 'wrap' } },
+          button(text.saveConfig, saveConfig, busy === 'config' || cfgDraft === null),
+          h('span', { style: { fontSize: '11px', color: 'var(--dsw-alias-label-secondary)' } }, text.recoveryHint)),
       ),
       group(text.filters, ['pytest', 'git', 'tsc', 'packageManager', 'generic', 'rtk']),
       group(text.retrieval, ['readOutline', 'grepCap']),

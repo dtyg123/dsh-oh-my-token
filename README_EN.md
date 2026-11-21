@@ -50,6 +50,7 @@ To change a budget, add the field under that row in the profile's `cordis.patch.
 **Settings → 省 Token** is the management panel:
 
 - One switch per transform (5 command filters, RTK structure compaction, 2 retrieval transforms, the period trimmer, the system-prompt editor);
+- Advanced: budgets, `minChars`/`minGain`, retrieval thresholds, over-budget recovery (`spill`/`rerun`/`none`), `logEvery`, and the plugin master switch;
 - A three-way scope for the period trimmer (`off` / prose outputs only / all prose);
 - The savings record: this process and all time, tokens and characters removed, the saved share, a per-tool table, and a message/reply strip count;
 - The profile directory the choice is written to, so you can see whether a switch actually persisted.
@@ -90,7 +91,7 @@ At the bottom of Settings → 省 Token, the 系统提示词 card lets you enabl
 | `recovery` | `spill` | `spill` \| `rerun` \| `none`. |
 | `logEvery` | `0` | Log a savings line every N rewritten results; `0` is quiet. |
 
-An unknown field is an error at activation, not a silent no-op.
+An unknown field is an error at activation, not a silent no-op. Every field above is editable in Settings → 省 Token → Advanced; `enabled` is the master switch, and `filters.*` map to the switch rows above.
 
 ### Why the period trimmer is guarded
 

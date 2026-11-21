@@ -391,3 +391,31 @@ test('the system-prompt/assemble listener skips its edit for preview assemblies'
   assert.equal(appended.sections.length, 2);
   assert.equal(appended.sections[1].text, 'Only this.');
 });
+
+test('the state route persists numeric config and the master switch', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'oh-my-token-'));
+  const { routes } = mount({}, { profileDir: dir });
+  const response = fakeResponse();
+  await routes.get('/dsh-oh-my-token/state').handler(
+    postReq({ enabled: false, config: { budgets: { default: 7000 }, minChars: 900, recovery: 'rerun' } }),
+    response,
+  );
+  assert.equal(response.status, 200);
+  const body = response.json();
+  assert.equal(body.enabled, false);
+  assert.equal(body.config.budgets.default, 7000);
+  assert.equal(body.config.minChars, 900);
+  assert.equal(body.config.recovery, 'rerun');
+  const written = JSON.parse(readFileSync(join(dir, 'dsh-oh-my-token.state.json'), 'utf8'));
+  assert.equal(written.enabled, false);
+  assert.equal(written.config.budgets.default, 7000);
+});
+
+test('the master switch off leaves a tool result untouched', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'oh-my-token-'));
+  const { listeners, routes } = mount({}, { profileDir: dir });
+  await routes.get('/dsh-oh-my-token/state').handler(postReq({ enabled: false }), fakeResponse());
+  const handler = listeners.get('tools/post-execute');
+  const decision = await handler(pytest, { isError: false }, async () => accept(text(PYTEST_BODY)));
+  assert.equal(decision.content[0].text, PYTEST_BODY);
+});

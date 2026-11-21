@@ -4,8 +4,8 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
-  MODE_IDS, STATE_FILE, effectiveConfig, readState, resolveModes, sanitizeModePatch,
-  sanitizeScope, stateDirectory, writeState,
+  MODE_IDS, STATE_FILE, applyConfigOverrides, effectiveConfig, readState, resolveModes,
+  sanitizeConfigPatch, sanitizeModePatch, sanitizeScope, stateDirectory, writeState,
 } from '../lib/modes.js';
 import { resolveConfig } from '../lib/config.js';
 
@@ -97,4 +97,49 @@ test('a state file from another version is ignored, not guessed at', () => {
   const dir = mkdtempSync(join(tmpdir(), 'oh-my-token-state-'));
   writeFileSync(join(dir, STATE_FILE), JSON.stringify({ version: 99, modes: { git: false } }));
   assert.equal(readState(dir), undefined);
+});
+
+test('config patches keep valid numbers and drop bad ones', () => {
+  assert.deepEqual(sanitizeConfigPatch({
+    budgets: { default: 7000, read: -1, errorFactor: 2.5 },
+    minChars: 900,
+    minGain: 0.1,
+    retrieval: { maxGrepMatches: 80 },
+    recovery: 'rerun',
+    logEvery: 10,
+  }), {
+    budgets: { default: 7000, errorFactor: 2.5 },
+    minChars: 900,
+    minGain: 0.1,
+    retrieval: { maxGrepMatches: 80 },
+    recovery: 'rerun',
+    logEvery: 10,
+  });
+  assert.deepEqual(sanitizeConfigPatch({ recovery: 'magic', minGain: 2, minChars: 1.5 }), {});
+  assert.deepEqual(sanitizeConfigPatch(null), {});
+});
+
+test('config overrides merge nested maps without dropping siblings', () => {
+  const row = resolveConfig({ budgets: { default: 6000, read: 12000 } });
+  const merged = applyConfigOverrides(row, { budgets: { default: 7000 }, minChars: 900 });
+  assert.equal(merged.budgets.default, 7000);
+  assert.equal(merged.budgets.read, 12000);
+  assert.equal(merged.minChars, 900);
+  assert.equal(applyConfigOverrides(row, undefined), row);
+});
+
+test('state round-trips the master switch and config overrides', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'oh-my-token-state-'));
+  const state = {
+    enabled: false,
+    modes: { git: false },
+    proseScope: 'all',
+    config: { budgets: { default: 7000 }, recovery: 'rerun', logEvery: 5 },
+    systemPrompt: { segments: [] },
+  };
+  writeState(dir, state);
+  const read = readState(dir);
+  assert.equal(read.enabled, false);
+  assert.deepEqual(read.config, state.config);
+  assert.equal(read.modes.git, false);
 });

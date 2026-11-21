@@ -50,6 +50,7 @@ dsh plugin --profile web add file:/path/to/dsh-oh-my-token
 **设置 → 省 Token** 是管理面板：
 
 - 每个变换一个开关（5 个命令过滤器、RTK 结构压缩、2 个检索变换、句号剥离器、系统提示词编辑）；
+- 高级配置：预算、`minChars`/`minGain`、检索阈值、超预算处理（`spill`/`rerun`/`none`）与 `logEvery`，以及插件总开关；
 - 句号剥离器的三档范围（`off` / 仅散文输出 / 所有散文）；
 - 节省记录：本次进程与历史累计、移除的 token 与字符、节省比例、按工具明细表，以及消息/回复剥离计数；
 - 选择被写入的配置目录，方便确认开关是否真的落盘。
@@ -90,7 +91,7 @@ dsh plugin --profile web add file:/path/to/dsh-oh-my-token
 | `recovery` | `spill` | `spill` \| `rerun` \| `none`。 |
 | `logEvery` | `0` | 每 N 次改写打印一条节省日志；`0` 为静默。 |
 
-未知字段会在激活时报错，而不是静默忽略。
+未知字段会在激活时报错，而不是静默忽略。以上字段都可以在「设置 → 省 Token」的「高级配置」里修改；`enabled` 是总开关，`filters.*` 对应上方的开关行。
 
 ### 为什么句号剥离有防护
 

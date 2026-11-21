@@ -39,8 +39,8 @@ import {
   sanitizeSystemPrompt,
 } from './lib/system-prompt.js';
 import {
-  MODE_IDS, PROSE_SCOPES, effectiveConfig, readState, resolveModes, sanitizeModePatch,
-  sanitizeScope, stateDirectory, writeState,
+  MODE_IDS, PROSE_SCOPES, applyConfigOverrides, effectiveConfig, mergeConfigPatch, readState,
+  resolveModes, sanitizeConfigPatch, sanitizeModePatch, sanitizeScope, stateDirectory, writeState,
 } from './lib/modes.js';
 import {
   emptyStats, readStats, recordCall, recordMessageStrip, recordRewrite, summarize, writeStats,
@@ -89,13 +89,15 @@ export function apply(ctx, config) {
   const profileDir = stateDirectory();
   const persisted = readState(profileDir);
   const state = {
+    enabled: typeof persisted?.enabled === 'boolean' ? persisted.enabled : row.enabled,
     modes: { ...resolveModes(row), ...(persisted?.modes ?? {}) },
     proseScope: persisted?.proseScope ?? row.prose.scope,
     systemPrompt: persisted?.systemPrompt ?? emptySystemPrompt(),
+    config: persisted?.config ?? {},
   };
   // A single object the gate reads on every call; a switch replaces its
   // contents rather than rebuilding the listener.
-  const policy = effectiveConfig(row, state);
+  const policy = effectiveConfig(applyConfigOverrides(row, state.config), state);
 
   const session = emptyStats();
   let cumulative = readStats(profileDir);
@@ -131,10 +133,12 @@ export function apply(ctx, config) {
 
   /** The state the settings page renders. */
   const statePayload = () => ({
+    enabled: state.enabled,
     modes: MODE_IDS.map((id) => ({ id, on: state.modes[id] !== false })),
     proseScope: state.proseScope,
     scopes: PROSE_SCOPES,
     systemPrompt: state.systemPrompt,
+    config: applyConfigOverrides(row, state.config),
     profileDir: profileDir ?? null,
     session: summarize(session),
     cumulative: summarize(cumulative),
@@ -145,7 +149,7 @@ export function apply(ctx, config) {
     const decision = normalizeDecision(await next());
     // A non-accept decision, or a value replacement, belongs to another
     // listener or to the definition that owns the projection: leave it alone.
-    if (decision.kind !== 'accept' || Object.hasOwn(decision, 'value')) return decision;
+    if (!state.enabled || decision.kind !== 'accept' || Object.hasOwn(decision, 'value')) return decision;
 
     const content = decision.content ?? result?.content;
     if (!Array.isArray(content) || content.length === 0) return decision;
@@ -212,6 +216,7 @@ export function apply(ctx, config) {
   // model request (which is derived from the session log), so stripping here
   // keeps the record and the bytes the model reads identical.
   ctx.on('agent/pre-step', async (payload, next) => {
+    if (!state.enabled) return next();
     const sessionObject = payload?.agent?.session;
     const wantProse = state.modes.proseStrip !== false;
     const wantRtk = state.modes.rtk !== false;
@@ -236,7 +241,7 @@ export function apply(ctx, config) {
   // assembly (the restore button reading the original prompt) skips the edit.
   ctx.on('system-prompt/assemble', async (assembly, _context, next) => {
     const result = await next();
-    if (state.modes.systemPrompt !== true || _context?.preview) return result;
+    if (!state.enabled || state.modes.systemPrompt !== true || _context?.preview) return result;
     return applySystemPrompt(result, { enabled: true, ...state.systemPrompt });
   });
 
@@ -245,7 +250,7 @@ export function apply(ctx, config) {
   // what the durable stream records, so rewriting it here covers both.
   ctx.on('llm/stream', (options, next) => {
     const stream = next();
-    return state.modes.proseStrip === false ? stream : stripAssistantStream(stream, countStrip);
+    return (!state.enabled || state.modes.proseStrip === false) ? stream : stripAssistantStream(stream, countStrip);
   }, { prepend: true });
 
   // -------------------------------------------------------------------------
@@ -273,18 +278,25 @@ export function apply(ctx, config) {
           const patch = sanitizeModePatch(body?.modes);
           const scope = sanitizeScope(body?.proseScope);
           const systemPrompt = sanitizeSystemPrompt(body?.systemPrompt);
-          if (Object.keys(patch).length === 0 && scope === undefined && systemPrompt === undefined) {
-            sendJson(response, 400, { error: 'no valid switch values in "modes", no "proseScope" and no "systemPrompt"' });
+          const configPatch = sanitizeConfigPatch(body?.config);
+          const enabled = typeof body?.enabled === 'boolean' ? body.enabled : undefined;
+          if (Object.keys(patch).length === 0 && scope === undefined && systemPrompt === undefined
+            && Object.keys(configPatch).length === 0 && enabled === undefined) {
+            sendJson(response, 400, { error: 'no valid switch values, proseScope, systemPrompt, config or enabled' });
             return;
           }
           Object.assign(state.modes, patch);
           if (scope !== undefined) state.proseScope = scope;
           if (systemPrompt !== undefined) state.systemPrompt = systemPrompt;
-          Object.assign(policy, effectiveConfig(row, state));
+          if (enabled !== undefined) state.enabled = enabled;
+          if (Object.keys(configPatch).length > 0) state.config = mergeConfigPatch(state.config, configPatch);
+          Object.assign(policy, effectiveConfig(applyConfigOverrides(row, state.config), state));
           const path = writeState(profileDir, state);
           ctx.logger.info(
             `oh-my-token: settings changed (${Object.entries(patch).map(([key, on]) => `${key}=${on}`).join(' ') || 'no switch change'}`
-            + `${scope === undefined ? '' : ` proseScope=${scope}`}), `
+            + `${scope === undefined ? '' : ` proseScope=${scope}`}`
+            + `${enabled === undefined ? '' : ` enabled=${enabled}`}`
+            + `${Object.keys(configPatch).length === 0 ? '' : ` config=${Object.keys(configPatch).join(',')}`}), `
             + `${path === undefined ? 'NOT persisted (no profile directory)' : `persisted to ${path}`}`,
           );
           sendJson(response, 200, { ...statePayload(), saved: path ?? null });
