@@ -70,9 +70,9 @@ To change a budget, add the field under that row in the profile's `cordis.patch.
 
 Changes apply on the next tool call — no restart. The choice is written to `dsh-oh-my-token.state.json` in the profile directory (`DSH_PROFILE_DIR` when set, otherwise discovered from the profile that carries this package) and wins over the bundle config on the next start. Statistics live beside it in `dsh-oh-my-token.stats.json` and can be cleared from the page.
 
-页面由两条精确路由支撑：`/dsh-oh-my-token/state` 与 `/dsh-oh-my-token/stats`。
+页面由三条精确路由支撑：`/dsh-oh-my-token/state`、`/dsh-oh-my-token/stats` 与 `/dsh-oh-my-token/prompt`（读取当前生效的系统提示词）。
 
-Two exact routes back the page: `/dsh-oh-my-token/state` and `/dsh-oh-my-token/stats`.
+Three exact routes back the page: `/dsh-oh-my-token/state`, `/dsh-oh-my-token/stats`, and `/dsh-oh-my-token/prompt` (reads the currently effective system prompt).
 
 ## 系统提示词 / System prompt
 
@@ -81,14 +81,14 @@ Two exact routes back the page: `/dsh-oh-my-token/state` and `/dsh-oh-my-token/s
 - **追加**：保留原有所有 section，在末尾加一个 `interpolate: false` 的 section——文本里的 `{{...}}` 保持字面量，不会被当作未知变量而报错；
 - **整体替换**：只保留你写的那一段；
 - 运行时上下文快照不受影响；改动在下一次请求生效，无需重启。
-- 「恢复默认提示词」清空定制文本并关闭编辑开关，回到出厂提示词。
+- 「恢复默认提示词」：立即按当前注册实时组装一份系统提示词（首次使用、未发过消息也能读到），**预填**进文本框作为可编辑草稿——方便在原默认内容上重新改写；读到的始终是未注入定制文本的原始提示词。
 
 At the bottom of Settings → 省 Token, the 系统提示词 card lets you enable the switch, pick append or replace, type text, and save. The text is injected through DSH's official `system-prompt/assemble` waterfall:
 
 - **append** keeps every existing section and adds one `interpolate: false` section at the end — `{{...}}` in your text stays literal instead of throwing as an unknown variable;
 - **replace** keeps only your text;
 - runtime context snapshots are untouched, and changes apply on the next request with no restart.
-- 「恢复默认提示词」clears the custom text and turns the editor off, back to the default prompt.
+- 「恢复默认提示词」live-assembles the currently effective system prompt — readable from the very first use, before any message is sent — and **pre-fills** the text box as an editable draft, so you can rewrite on top of the default. It always reads the original prompt without your injected text.
 
 ## 配置 / Configuration
 

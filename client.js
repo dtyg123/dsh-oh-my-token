@@ -22,6 +22,7 @@ window.__ModuleLoader__.load({
     /** The Host half's routes; kept in one place so both halves agree. */
     const STATE_ENDPOINT = '/dsh-oh-my-token/state';
     const STATS_ENDPOINT = '/dsh-oh-my-token/stats';
+    const PROMPT_ENDPOINT = '/dsh-oh-my-token/prompt';
 
     const TEXT = {
       nav: '省 Token',
@@ -64,6 +65,7 @@ window.__ModuleLoader__.load({
       systemPromptPlaceholder: '在这里写下要发送给模型的系统提示词…',
       saveSystemPrompt: '保存系统提示词',
       restoreSystemPrompt: '恢复默认提示词',
+      nothingToRead: '没有读到当前生效的系统提示词（服务端未返回内容），请先发一条消息后再试。',
       modes: {
         pytest: ['pytest 结果', '通过时只留一行结论；失败时保留 FAILED、断言与摘要'],
         git: ['git 输出', 'status 干净时折叠成一行，diff 只留文件头和变更行'],
@@ -331,12 +333,22 @@ window.__ModuleLoader__.load({
         }
       };
 
-      /** Clear the custom text and turn the editor off, back to the default prompt. */
+      /** Read the currently effective default prompt into the text box as an editable draft. */
       const restoreSystemPrompt = async () => {
-        setSpDraft({ mode: 'append', text: '' });
         setBusy('systemPrompt');
         try {
-          await commit({ systemPrompt: false }, undefined, { mode: 'append', text: '' });
+          const response = await fetch(PROMPT_ENDPOINT, { headers: { accept: 'application/json' } });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const body = await response.json();
+          const prompt = body?.prompt ?? '';
+          if (prompt === '') {
+            setError(text.nothingToRead);
+            return;
+          }
+          setSpDraft({ mode: 'replace', text: prompt });
+          setError('');
+        } catch (failure) {
+          setError(`${text.failed}: ${String(failure?.message ?? failure)}`);
         } finally {
           setBusy('');
         }

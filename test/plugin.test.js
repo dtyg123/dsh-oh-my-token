@@ -35,7 +35,7 @@ function postReq(payload) {
 }
 
 /** Mount the plugin against a fake context and capture its listeners and routes. */
-function mount(config, { webServer, profileDir } = {}) {
+function mount(config, { webServer, profileDir, services } = {}) {
   const listeners = new Map();
   const routes = new Map();
   const infos = [];
@@ -62,7 +62,7 @@ function mount(config, { webServer, profileDir } = {}) {
       debug: () => {},
       warn: (message) => warnings.push(message),
     },
-    get: () => undefined,
+    get: (service) => services?.[service],
   };
   try {
     apply(ctx, config);
@@ -89,10 +89,10 @@ test('identity', () => {
   assert.deepEqual(inject, ['tools']);
 });
 
-test('registers its four listeners and two routes', () => {
+test('registers its four listeners and three routes', () => {
   const { listeners, routes, infos } = mount({});
   assert.deepEqual([...listeners.keys()], ['tools/post-execute', 'agent/pre-step', 'system-prompt/assemble', 'llm/stream']);
-  assert.deepEqual([...routes.keys()], ['/dsh-oh-my-token/state', '/dsh-oh-my-token/stats']);
+  assert.deepEqual([...routes.keys()], ['/dsh-oh-my-token/state', '/dsh-oh-my-token/stats', '/dsh-oh-my-token/prompt']);
   assert.equal(infos.length, 1);
 });
 
@@ -345,4 +345,46 @@ test('an empty patch is rejected when it carries no systemPrompt either', async 
   const response = fakeResponse();
   await routes.get('/dsh-oh-my-token/state').handler(postReq({ modes: {} }), response);
   assert.equal(response.status, 400);
+});
+
+test('the prompt route live-assembles the current prompt for restore', async () => {
+  const systemPrompt = {
+    assemble: async (context) => {
+      assert.equal(context?.preview, true, 'restore assembly is marked preview');
+      return {
+        sections: [{ name: 'a', text: 'Default prompt.', interpolate: true }],
+        contexts: [],
+        variables: {},
+      };
+    },
+  };
+  const { routes } = mount({}, { services: { systemPrompt } });
+  const response = fakeResponse();
+  await routes.get('/dsh-oh-my-token/prompt').handler({ method: 'GET' }, response);
+  assert.equal(response.status, 200);
+  const body = response.json();
+  assert.equal(body.prompt, 'Default prompt.');
+  assert.equal(body.source, 'live');
+  assert.equal(body.capturedAt, null);
+});
+
+test('the prompt route stays quiet when the services are missing', async () => {
+  const { routes } = mount({});
+  const response = fakeResponse();
+  await routes.get('/dsh-oh-my-token/prompt').handler({ method: 'GET' }, response);
+  assert.equal(response.status, 200);
+  assert.deepEqual(response.json(), { prompt: '', capturedAt: null, source: 'empty' });
+});
+
+test('the system-prompt/assemble listener skips its edit for preview assemblies', async () => {
+  const { listeners, routes } = mount({});
+  const handler = listeners.get('system-prompt/assemble');
+  const assembly = { sections: [{ name: 'persona', text: 'Be brief.' }], contexts: [], variables: {} };
+  await routes.get('/dsh-oh-my-token/state').handler(postReq({
+    modes: { systemPrompt: true },
+    systemPrompt: { mode: 'replace', text: 'Only this.' },
+  }), fakeResponse());
+  assert.equal(await handler(assembly, { preview: true }, async () => assembly), assembly);
+  const replaced = await handler(assembly, {}, async () => assembly);
+  assert.equal(replaced.sections[0].text, 'Only this.');
 });

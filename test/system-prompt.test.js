@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  MAX_SYSTEM_PROMPT_CHARS, SECTION_NAME, applySystemPrompt, emptySystemPrompt,
-  sanitizeSystemPrompt,
+  MAX_SYSTEM_PROMPT_CHARS, SECTION_NAME, applySystemPrompt, describeLiveAssembly,
+  emptySystemPrompt, renderPreviewPrompt, sanitizeSystemPrompt,
 } from '../lib/system-prompt.js';
 
 const assembly = () => ({
@@ -47,4 +47,27 @@ test('sanitizing keeps only known modes and bounded text', () => {
   assert.deepEqual(sanitizeSystemPrompt({ text: 5 }), undefined);
   assert.deepEqual(sanitizeSystemPrompt(null), undefined);
   assert.equal(sanitizeSystemPrompt({ text: 'x'.repeat(MAX_SYSTEM_PROMPT_CHARS + 50) }).text.length, MAX_SYSTEM_PROMPT_CHARS);
+});
+
+test('renderPreviewPrompt interpolates known variables and keeps unknown ones literal', () => {
+  const assembly = {
+    sections: [
+      { name: 'a', text: 'Hi {{provider}} and {{unknown}}.', interpolate: true },
+      { name: 'b', text: 'World.', interpolate: false },
+    ],
+    variables: { provider: 'deepseek' },
+  };
+  assert.equal(renderPreviewPrompt(assembly), 'Hi deepseek and {{unknown}}.\n\nWorld.');
+  assert.equal(renderPreviewPrompt(undefined), '');
+  assert.equal(renderPreviewPrompt({}), '');
+});
+
+test('describeLiveAssembly renders sections into a prompt snapshot', () => {
+  const live = describeLiveAssembly({
+    sections: [{ name: 'a', text: 'Be brief.', interpolate: true }],
+    variables: {},
+  });
+  assert.equal(live.prompt, 'Be brief.');
+  assert.equal(live.capturedAt, null);
+  assert.equal(live.source, 'live');
 });

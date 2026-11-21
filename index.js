@@ -34,7 +34,10 @@
 import { resolveConfig } from './lib/config.js';
 import { compressToolResult, normalizeDecision } from './lib/gate.js';
 import { stripAssistantStream, stripClaimedMessages, stripHistoryMessages } from './lib/messages.js';
-import { applySystemPrompt, emptySystemPrompt, sanitizeSystemPrompt } from './lib/system-prompt.js';
+import {
+  applySystemPrompt, describeLiveAssembly, emptySystemPrompt,
+  sanitizeSystemPrompt,
+} from './lib/system-prompt.js';
 import {
   MODE_IDS, PROSE_SCOPES, effectiveConfig, readState, resolveModes, sanitizeModePatch,
   sanitizeScope, stateDirectory, writeState,
@@ -96,6 +99,20 @@ export function apply(ctx, config) {
 
   const session = emptyStats();
   let cumulative = readStats(profileDir);
+  // Live read for the restore button: assemble the currently registered
+  // sections on demand, so the default prompt is readable on first use with no
+  // message ever sent. `preview` keeps our own edit out, so what comes back is
+  // the original "default" prompt, not the one augmented by the custom text.
+  const livePrompt = async () => {
+    try {
+      const assemble = ctx.get?.('systemPrompt')?.assemble?.bind(ctx.get('systemPrompt'));
+      if (typeof assemble !== 'function') return undefined;
+      return describeLiveAssembly(await assemble({ preview: true }));
+    } catch (error) {
+      ctx.logger?.warn?.(`oh-my-token: live prompt read failed (${String(error?.message ?? error)})`);
+      return undefined;
+    }
+  };
   let timer;
   const flush = () => writeStats(profileDir, cumulative);
   const scheduleFlush = () => {
@@ -209,10 +226,11 @@ export function apply(ctx, config) {
   });
 
   // The official prompt seam: one extra section appended to, or replacing,
-  // the assembled system prompt. Context sections are left alone.
+  // the assembled system prompt. Context sections are left alone. A `preview`
+  // assembly (the restore button reading the original prompt) skips the edit.
   ctx.on('system-prompt/assemble', async (assembly, _context, next) => {
     const result = await next();
-    if (state.modes.systemPrompt !== true) return result;
+    if (state.modes.systemPrompt !== true || _context?.preview) return result;
     return applySystemPrompt(result, { enabled: true, ...state.systemPrompt });
   });
 
@@ -307,6 +325,23 @@ export function apply(ctx, config) {
         }
       },
     }), 'oh-my-token: stats route');
+
+    webCtx.effect(() => webCtx.webServer.register({
+      kind: 'exact',
+      path: '/dsh-oh-my-token/prompt',
+      handler: async (request, response) => {
+        if (request.method !== 'GET') {
+          response.writeHead(405, { allow: 'GET' });
+          response.end();
+          return;
+        }
+        // The restore button reads the currently effective default prompt:
+        // assemble the registered sections live so it works from the first
+        // launch, before any request exists. `preview` keeps the edit off.
+        const snapshot = await livePrompt();
+        sendJson(response, 200, snapshot ?? { prompt: '', capturedAt: null, source: 'empty' });
+      },
+    }), 'oh-my-token: prompt route');
   });
 
   ctx.logger.info(
