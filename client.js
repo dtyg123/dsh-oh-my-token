@@ -22,6 +22,7 @@ window.__ModuleLoader__.load({
     /** The Host half's routes; kept in one place so both halves agree. */
     const STATE_ENDPOINT = '/dsh-oh-my-token/state';
     const STATS_ENDPOINT = '/dsh-oh-my-token/stats';
+    const PROMPT_ENDPOINT = '/dsh-oh-my-token/prompt';
 
     const TEXT = {
       nav: '省 Token',
@@ -63,6 +64,9 @@ window.__ModuleLoader__.load({
       systemPromptModes: { append: '追加到末尾', replace: '整体替换' },
       systemPromptPlaceholder: '在这里写下要发送给模型的系统提示词…',
       saveSystemPrompt: '保存系统提示词',
+      readCurrentPrompt: '读取原提示词',
+      readCurrentTools: '读取工具说明',
+      nothingToRead: '还没有捕获到请求，先发一条消息再读取。',
       modes: {
         pytest: ['pytest 结果', '通过时只留一行结论；失败时保留 FAILED、断言与摘要'],
         git: ['git 输出', 'status 干净时折叠成一行，diff 只留文件头和变更行'],
@@ -330,6 +334,30 @@ window.__ModuleLoader__.load({
         }
       };
 
+      /** Append the latest real request's prompt or tool schemas to the draft. */
+      const readIntoDraft = async (field) => {
+        setBusy(`read-${field}`);
+        try {
+          const response = await fetch(PROMPT_ENDPOINT, { headers: { accept: 'application/json' } });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const body = await response.json();
+          const addition = body?.[field] ?? '';
+          if (addition === '') {
+            setError(text.nothingToRead);
+            return;
+          }
+          setSpDraft((current) => ({
+            mode: current?.mode ?? 'append',
+            text: (current?.text ?? '') + (current?.text ? '\n\n' : '') + addition,
+          }));
+          setError('');
+        } catch (failure) {
+          setError(`${text.failed}: ${String(failure?.message ?? failure)}`);
+        } finally {
+          setBusy('');
+        }
+      };
+
       const reset = async () => {
         setConfirming(false);
         setBusy('reset');
@@ -498,6 +526,8 @@ window.__ModuleLoader__.load({
         }),
         h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px', flexWrap: 'wrap' } },
           button(text.saveSystemPrompt, () => { saveSystemPrompt(); }, !modeOf('systemPrompt') || busy === 'systemPrompt'),
+          button(text.readCurrentPrompt, () => { readIntoDraft('prompt'); }, !modeOf('systemPrompt') || busy !== ''),
+          button(text.readCurrentTools, () => { readIntoDraft('tools'); }, !modeOf('systemPrompt') || busy !== ''),
         ),
         h('div', {
           style: {

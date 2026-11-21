@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  MAX_SYSTEM_PROMPT_CHARS, SECTION_NAME, applySystemPrompt, emptySystemPrompt,
+  MAX_SYSTEM_PROMPT_CHARS, SECTION_NAME, applySystemPrompt, describeRequest, emptySystemPrompt,
   sanitizeSystemPrompt,
 } from '../lib/system-prompt.js';
 
@@ -38,6 +38,30 @@ test('a disabled or empty editor is a no-op', () => {
   assert.equal(applySystemPrompt(input, { enabled: false, mode: 'append', text: 'x' }), input);
   assert.equal(applySystemPrompt(input, { enabled: true, mode: 'append', text: '   \n' }), input);
   assert.equal(applySystemPrompt(input, undefined), input);
+});
+
+test('describeRequest reads system messages and tool schemas', () => {
+  const snapshot = describeRequest({
+    sessionId: 's1',
+    messages: [
+      { role: 'system', content: [{ type: 'text', text: 'You are helpful.' }] },
+      { role: 'system', content: [{ type: 'text', text: 'Second section.' }] },
+      { role: 'user', content: [{ type: 'text', text: 'hi' }] },
+    ],
+    tools: [{ name: 'bash', description: 'Run a command.', parameters: { type: 'object' } }],
+  });
+  assert.equal(snapshot.prompt, 'You are helpful.\n\nSecond section.');
+  assert.match(snapshot.tools, /## bash/);
+  assert.match(snapshot.tools, /Run a command\./);
+  assert.match(snapshot.tools, /"type": "object"/);
+  assert.ok(typeof snapshot.capturedAt === 'string');
+  assert.deepEqual(describeRequest(undefined), undefined);
+});
+
+test('describeRequest tolerates a request without system messages or tools', () => {
+  const snapshot = describeRequest({ messages: [{ role: 'user', content: [] }] });
+  assert.equal(snapshot.prompt, '');
+  assert.equal(snapshot.tools, '');
 });
 
 test('sanitizing keeps only known modes and bounded text', () => {

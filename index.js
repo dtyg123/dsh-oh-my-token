@@ -34,7 +34,9 @@
 import { resolveConfig } from './lib/config.js';
 import { compressToolResult, normalizeDecision } from './lib/gate.js';
 import { stripAssistantStream, stripClaimedMessages, stripHistoryMessages } from './lib/messages.js';
-import { applySystemPrompt, emptySystemPrompt, sanitizeSystemPrompt } from './lib/system-prompt.js';
+import {
+  applySystemPrompt, describeRequest, emptySystemPrompt, sanitizeSystemPrompt,
+} from './lib/system-prompt.js';
 import {
   MODE_IDS, PROSE_SCOPES, effectiveConfig, readState, resolveModes, sanitizeModePatch,
   sanitizeScope, stateDirectory, writeState,
@@ -96,6 +98,8 @@ export function apply(ctx, config) {
 
   const session = emptyStats();
   let cumulative = readStats(profileDir);
+  // Read-only snapshot of the latest agent request, for the settings page.
+  let lastRequest;
   let timer;
   const flush = () => writeStats(profileDir, cumulative);
   const scheduleFlush = () => {
@@ -220,6 +224,7 @@ export function apply(ctx, config) {
   // `block-end` text is what the assembler uses for the assistant message and
   // what the durable stream records, so rewriting it here covers both.
   ctx.on('llm/stream', (options, next) => {
+    if (options?.sessionId !== undefined) lastRequest = describeRequest(options);
     const stream = next();
     return state.modes.proseStrip === false ? stream : stripAssistantStream(stream, countStrip);
   }, { prepend: true });
@@ -307,6 +312,19 @@ export function apply(ctx, config) {
         }
       },
     }), 'oh-my-token: stats route');
+
+    webCtx.effect(() => webCtx.webServer.register({
+      kind: 'exact',
+      path: '/dsh-oh-my-token/prompt',
+      handler: async (request, response) => {
+        if (request.method !== 'GET') {
+          response.writeHead(405, { allow: 'GET' });
+          response.end();
+          return;
+        }
+        sendJson(response, 200, lastRequest ?? { prompt: '', tools: '', capturedAt: null });
+      },
+    }), 'oh-my-token: prompt route');
   });
 
   ctx.logger.info(

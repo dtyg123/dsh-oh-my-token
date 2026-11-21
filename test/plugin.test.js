@@ -89,10 +89,10 @@ test('identity', () => {
   assert.deepEqual(inject, ['tools']);
 });
 
-test('registers its four listeners and two routes', () => {
+test('registers its four listeners and three routes', () => {
   const { listeners, routes, infos } = mount({});
   assert.deepEqual([...listeners.keys()], ['tools/post-execute', 'agent/pre-step', 'system-prompt/assemble', 'llm/stream']);
-  assert.deepEqual([...routes.keys()], ['/dsh-oh-my-token/state', '/dsh-oh-my-token/stats']);
+  assert.deepEqual([...routes.keys()], ['/dsh-oh-my-token/state', '/dsh-oh-my-token/stats', '/dsh-oh-my-token/prompt']);
   assert.equal(infos.length, 1);
 });
 
@@ -345,4 +345,20 @@ test('an empty patch is rejected when it carries no systemPrompt either', async 
   const response = fakeResponse();
   await routes.get('/dsh-oh-my-token/state').handler(postReq({ modes: {} }), response);
   assert.equal(response.status, 400);
+});
+
+test('the prompt route exposes the latest captured prompt and tool schemas', async () => {
+  const { listeners, routes } = mount({});
+  const stream = (async function* () {})();
+  listeners.get('llm/stream')({
+    sessionId: 's1',
+    messages: [{ role: 'system', content: [{ type: 'text', text: 'Real prompt.' }] }],
+    tools: [{ name: 'bash', description: 'Run a command.', parameters: { type: 'object' } }],
+  }, () => stream);
+  const response = fakeResponse();
+  await routes.get('/dsh-oh-my-token/prompt').handler({ method: 'GET' }, response);
+  assert.equal(response.status, 200);
+  const body = response.json();
+  assert.equal(body.prompt, 'Real prompt.');
+  assert.match(body.tools, /## bash/);
 });
