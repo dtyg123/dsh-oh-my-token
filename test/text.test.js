@@ -55,6 +55,19 @@ test('every trailing sentence mark is removed, not just one', () => {
   assert.equal(stripTrailingPeriods('Really...'), 'Really...', 'an ASCII ellipsis is kept');
 });
 
+test('politeness words and trailing commas are removed with the period', () => {
+  assert.equal(stripTrailingPeriods('谢谢，请稍等。'), '稍等');
+  assert.equal(stripTrailingPeriods('请更新配置。'), '更新配置');
+  assert.equal(stripTrailingPeriods('Please fix the bug,'), 'fix the bug');
+  assert.equal(stripTrailingPeriods('Thank you, done.'), 'done');
+});
+
+test('politeness removal does not corrupt compounds or code', () => {
+  assert.equal(stripTrailingPeriods('请求已发送。'), '请求已发送');
+  assert.equal(stripTrailingPeriods("const msg = '谢谢'"), "const msg = '谢谢'");
+  assert.equal(stripTrailingPeriods('const x = 1,'), 'const x = 1,');
+});
+
 test('stripAnsi and carriage-return repaints', () => {
   assert.equal(stripAnsi('\u001b[31mred\u001b[0m'), 'red');
   assert.equal(resolveCarriageReturns('10%\r50%\r100%'), '100%');

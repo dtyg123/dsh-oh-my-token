@@ -25,7 +25,7 @@ test('a user prompt loses only its prose-line trailing periods', () => {
   assert.equal(stripped.id, msg.id);
   assert.equal(stripped.role, msg.role);
   assert.equal(stripped.source, msg.source);
-  assert.equal(stripped.content[0].text, 'Please fix the bug\nThen ship it\n');
+  assert.equal(stripped.content[0].text, 'fix the bug\nThen ship it\n');
   // The original is untouched.
   assert.equal(msg.content[0].text, 'Please fix the bug.\nThen ship it.\n');
 });

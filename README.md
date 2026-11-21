@@ -17,9 +17,9 @@ It internalises two ideas rather than bundling two tools:
 | 检索符号而非整文件 / Retrieve symbols, not files | codegraph | 把超大且未指定范围的 `read` 变成符号大纲，并限制过大的 `grep` 结果。无 SQLite 图库、无 MCP 服务。Turns a large un-ranged `read` into a symbol outline and caps huge `grep` results. No SQLite graph, no MCP server. |
 | 按输出形状压缩 / Structure-aware compaction | [RTK](https://github.com/rtk-ai/rtk)，移植自 [`dsh-our-free-model`](https://github.com/Ebony-Vinyl/dsh-our-free-model) | 命令过滤器没命中时，再按内容形状压缩：git diff/status/log、构建日志、grep/find/ls/tree、重复日志、编号文件与搜索结果。纯 JS，无二进制。When no command filter matched, compact by output shape: git diff/status/log, build logs, grep/find/ls/tree, duplicate logs, numbered dumps and search lists. Pure JS, no binary. |
 
-外加一项模型根本不需要读取的变换：对可判定为散文的行，删除句末**连续的** `.` 与 `。`（一行末尾有几个就删几个；ASCII 省略号 `...` / `…` 除外）。它作用于工具输出、你亲手输入的消息、助手的回复，以及历史对话——历史部分在组装请求时剥离，因此模型永远不会看到这些句号，而磁盘上的会话文件保持逐字节不变。
+外加一项模型根本不需要读取的变换：对可判定为散文的行，删去「谢谢」「请」「please」「thanks」等客套词，再删除句末**连续的** `.`、`。`、`,`、`，`（一行末尾有几个就删几个；ASCII 省略号 `...` / `…` 除外）。它作用于工具输出、你亲手输入的消息、助手的回复，以及历史对话——历史部分在组装请求时剥离，因此模型永远不会看到这些内容，而磁盘上的会话文件保持逐字节不变。
 
-Plus one transformation the model never needs to read: the run of **sentence-final** `.` and `。` marks on a line that is provably prose (every trailing mark is removed, not just one; an ASCII ellipsis `...` / `…` is excluded). It applies to tool output, your own typed messages, the assistant's replies, and past turns — the last of these is stripped while the request is assembled, so the model never sees those periods while the stored session files stay byte-for-byte unchanged.
+Plus one transformation the model never needs to read: on a line that is provably prose, politeness words (`谢谢`, `请`, `please`, `thanks`, …) are dropped, then the run of **sentence-final** `.`, `。`, `,` and `，` marks. It applies to tool output, your own typed messages, the assistant's replies, and past turns — the last of these is stripped while the request is assembled, so the model never sees those bytes while the stored session files stay byte-for-byte unchanged.
 
 ## 它保留了什么 / What it keeps
 
@@ -111,7 +111,7 @@ At the bottom of Settings → 省 Token, the 系统提示词 card lets you enabl
 | `retrieval.readOutlineOverLines` | `400` | 仅当行数超过此值且调用未带 `offset`/`limit` 时才生成大纲。Outline a `read` only above this line count, and only when the call had no `offset`/`limit`. |
 | `retrieval.maxOutlineSymbols` | `60` | |
 | `retrieval.maxGrepMatches` | `50` | |
-| `prose.stripTrailingPeriod` | `true` | 删除散文行末尾**连续的** `.` / `。`（省略号除外）。Remove every trailing `.` / `。` from prose lines (an ASCII ellipsis is kept). |
+| `prose.stripTrailingPeriod` | `true` | 删去散文行里的「谢谢」「请」等客套词，并删除末尾**连续的** `.` / `。` / `,` / `，`（省略号除外）。Drop politeness words and every trailing `.` / `。` / `,` / `，` from prose lines (an ASCII ellipsis is kept). |
 | `prose.scope` | `filtered` | `filtered` = 仅命令过滤器标记为散文的输出（如 `git log`）；`all`；`off`。 |
 | `recovery` | `spill` | `spill` \| `rerun` \| `none`。 |
 | `logEvery` | `0` | 每 N 次改写打印一条节省日志；`0` 为静默。Log a savings line every N rewritten results; `0` is quiet. |
@@ -124,7 +124,8 @@ At the bottom of Settings → 省 Token, the 系统提示词 card lets you enabl
 
 Deleting a period from a filename, a URL, a version or a line of code corrupts data to save one token. `isProseLine` therefore refuses:
 
-- 围栏代码、diff 行、以 `{ [ <` 开头或以 `;{},=` 结尾的行；fenced code, diff lines, lines starting with `{ [ <`, lines ending in `;{},=`
+- 围栏代码、diff 行、以 `{ [ <` 开头或以 `;{}=` 结尾的行，以及带 `= ( ) ; { } [ ]` 等代码标点又以逗号结尾的行；fenced code, diff lines, lines starting with `{ [ <`, lines ending in `;{}=`, and lines carrying code punctuation (`= ( ) ; { } [ ]`) that end in a comma
+- 赋值/声明/语句行（含 `= ; { }` 或以 `const`/`function`/`import` 等开头），客套词删除不会碰它们；assignment/statement lines (containing `= ; { }` or starting with `const`/`function`/`import`), which politeness removal never touches
 - 含 URL、邮箱、带扩展名路径的行；anything containing a URL, an email address, a path with an extension
 - 看起来像版本号（`2.2.0`）或 `host:port` 的内容；anything that looks like a version (`2.2.0`) or `host:port`
 - 列表项（`- `、`*`）、省略号，以及 `e.g.` / `i.e.`。list items (`- `, `* `), ellipses, and `e.g.` / `i.e.`
