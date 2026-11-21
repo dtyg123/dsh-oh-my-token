@@ -105,7 +105,8 @@ window.__ModuleLoader__.load({
         rtk: ['RTK 风格压缩', '命令过滤器未命中时，再按结构压缩 git 输出、构建日志、grep/find/ls/tree 等'],
         readOutline: ['大文件大纲', '超过行数阈值且没给 offset/limit 的 read 只返回符号大纲'],
         grepCap: ['搜索结果截断', '匹配过多时只留前 N 条并说明剩余数量'],
-        proseStrip: ['句末标点与客套词', '删除散文行、你的输入与助手回复末尾的句号/逗号，并删去「谢谢」「请」等客套词；代码、URL、路径、版本号不动'],
+        proseStrip: ['删除句末标点', '删除散文行、你的输入与助手回复末尾的句号/逗号；代码、URL、路径、版本号不动'],
+        politenessStrip: ['删除客套词', '删除散文行、你的输入与助手回复里的「谢谢」「请」「please」「thanks」等客套词；代码、URL、路径、版本号不动'],
         systemPrompt: ['修改系统提示词', '把若干小段分段拼接到系统提示词末尾'],
       },
       file: '配置目录',
@@ -571,6 +572,7 @@ window.__ModuleLoader__.load({
 
       const modes = Array.isArray(state?.modes) ? state.modes : [];
       const modeOf = (id) => modes.find((mode) => mode.id === id)?.on === true;
+      const proseOn = modeOf('proseStrip') || modeOf('politenessStrip');
       const cumulative = state?.cumulative ?? {};
       const session = state?.session ?? {};
       const tools = Array.isArray(cumulative.tools) ? cumulative.tools : [];
@@ -672,6 +674,9 @@ window.__ModuleLoader__.load({
           h(ModeRow, {
             id: 'proseStrip', on: modeOf('proseStrip'), text, busy, onToggle: toggle,
           }),
+          h(ModeRow, {
+            id: 'politenessStrip', on: modeOf('politenessStrip'), text, busy, onToggle: toggle,
+          }),
         ),
         h('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '6px' } },
           scopes.map((scope) => {
@@ -682,7 +687,7 @@ window.__ModuleLoader__.load({
               role: 'radio',
               'aria-checked': on ? 'true' : 'false',
               'data-scope': scope,
-              disabled: !modeOf('proseStrip') || busy === 'scope',
+              disabled: !proseOn || busy === 'scope',
               onClick: () => setScope(scope),
               style: {
                 padding: '3px 9px', borderRadius: '999px',
@@ -690,8 +695,8 @@ window.__ModuleLoader__.load({
                 background: on ? 'var(--dsw-alias-bg-layer-1)' : 'transparent',
                 color: on ? 'var(--dsw-alias-label-primary)' : 'var(--dsw-alias-label-secondary)',
                 fontSize: '11px', lineHeight: '16px', font: 'inherit',
-                cursor: modeOf('proseStrip') ? 'pointer' : 'default',
-                opacity: modeOf('proseStrip') ? 1 : 0.55,
+                cursor: proseOn ? 'pointer' : 'default',
+                opacity: proseOn ? 1 : 0.55,
               },
             }, text.scopes[scope] ?? scope);
           }),

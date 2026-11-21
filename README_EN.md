@@ -13,7 +13,7 @@ It internalises two ideas rather than bundling two tools:
 | Command- and structure-aware compaction | [RTK](https://github.com/rtk-ai/rtk) (Apache-2.0) | Parses the command the model already ran and keeps the verdict plus failure detail; when no command filter matched, compacts by output shape: git diff/status/log, build logs, grep/find/ls/tree, duplicate logs, numbered dumps and search lists. Pure JS, no binary. |
 | Retrieve symbols, not files | [codegraph](https://github.com/isink17/codegraph) | Turns a large un-ranged `read` into a symbol outline and caps huge `grep` results. No SQLite graph, no MCP server. |
 
-Plus one transformation the model never needs to read: on a line that is provably prose, politeness words (`谢谢`, `请`, `please`, `thanks`, …) are dropped, then the run of **sentence-final** `.`, `。`, `,` and `，` marks. It applies to tool output, your own typed messages, the assistant's replies, and past turns — the last of these is stripped while the request is assembled, so the model never sees those bytes while the stored session files stay byte-for-byte unchanged.
+Plus two transformations the model never needs to read (independently switchable): on a line that is provably prose, politeness words (`谢谢`, `请`, `please`, `thanks`, …) are dropped, and the run of **sentence-final** `.`, `。`, `,` and `，` marks is removed. They apply to tool output, your own typed messages, the assistant's replies, and past turns — the last of these is stripped while the request is assembled, so the model never sees those bytes while the stored session files stay byte-for-byte unchanged.
 
 ## What it keeps
 
@@ -49,9 +49,9 @@ To change a budget, add the field under that row in the profile's `cordis.patch.
 
 **Settings → 省 Token** is the management panel:
 
-- One switch per transform (5 command filters, RTK structure compaction, 2 retrieval transforms, the period trimmer, the system-prompt editor);
+- One switch per transform (5 command filters, RTK structure compaction, 2 retrieval transforms, the period trimmer, the politeness trimmer, the system-prompt editor);
 - Advanced: budgets, `minChars`/`minGain`, retrieval thresholds, over-budget recovery (`spill`/`rerun`/`none`), `logEvery`, and the plugin master switch;
-- A three-way scope for the period trimmer (`off` / prose outputs only / all prose);
+- A three-way scope shared by the prose trimmers (punctuation / politeness) (`off` / prose outputs only / all prose);
 - The savings record: this process and all time, tokens and characters removed, the saved share, a per-tool table, and a message/reply strip count;
 - The profile directory the choice is written to, so you can see whether a switch actually persisted.
 
@@ -86,7 +86,8 @@ At the bottom of Settings → 省 Token, the 系统提示词 card lets you enabl
 | `retrieval.readOutlineOverLines` | `400` | Outline a `read` only above this line count, and only when the call had no `offset`/`limit`. |
 | `retrieval.maxOutlineSymbols` | `60` | |
 | `retrieval.maxGrepMatches` | `50` | |
-| `prose.stripTrailingPeriod` | `true` | Drop politeness words and every trailing `.` / `。` / `,` / `，` from prose lines (an ASCII ellipsis is kept). |
+| `prose.stripTrailingPeriod` | `true` | Remove every trailing `.` / `。` / `,` / `，` from prose lines (an ASCII ellipsis is kept). |
+| `prose.stripPoliteness` | `true` | Drop politeness words (`谢谢`, `请`, `please`, `thanks`, …) from prose lines. |
 | `prose.scope` | `filtered` | `filtered` = only output a command filter marked as prose (e.g. `git log`); `all`; `off`. |
 | `recovery` | `spill` | `spill` \| `rerun` \| `none`. |
 | `logEvery` | `0` | Log a savings line every N rewritten results; `0` is quiet. |

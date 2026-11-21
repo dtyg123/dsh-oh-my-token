@@ -30,6 +30,13 @@ test('a user prompt loses only its prose-line trailing periods', () => {
   assert.equal(msg.content[0].text, 'Please fix the bug.\nThen ship it.\n');
 });
 
+test('politeness and punctuation can be disabled independently', () => {
+  const msg = userMessage('谢谢，请稍等。');
+  assert.equal(stripUserMessage(msg, undefined, { politeness: false }).content[0].text, '谢谢，请稍等');
+  assert.equal(stripUserMessage(msg, undefined, { punctuation: false }).content[0].text, '稍等。');
+  assert.equal(stripUserMessage(msg, undefined, { politeness: false, punctuation: false }), msg);
+});
+
 test('a filename or code-like line keeps its period', () => {
   const msg = userMessage('Edit main.js.');
   assert.equal(stripUserMessage(msg), msg, 'the filename guard rejects the line');

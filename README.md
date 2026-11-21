@@ -13,7 +13,7 @@
 | 按命令与输出形状压缩 | [RTK](https://github.com/rtk-ai/rtk)（Apache-2.0） | 先解析模型已运行的命令，只保留结论和失败细节；命令过滤器没命中时，再按内容形状压缩：git diff/status/log、构建日志、grep/find/ls/tree、重复日志、编号文件与搜索结果。纯 JS，无二进制。 |
 | 检索符号而非整文件 | [codegraph](https://github.com/isink17/codegraph) | 把超大且未指定范围的 `read` 变成符号大纲，并限制过大的 `grep` 结果。无 SQLite 图库、无 MCP 服务。 |
 
-外加一项模型根本不需要读取的变换：对可判定为散文的行，删去「谢谢」「请」「please」「thanks」等客套词，再删除句末**连续的** `.`、`。`、`,`、`，`（一行末尾有几个就删几个；ASCII 省略号 `...` / `…` 除外）。它作用于工具输出、你亲手输入的消息、助手的回复，以及历史对话——历史部分在组装请求时剥离，因此模型永远不会看到这些内容，而磁盘上的会话文件保持逐字节不变。
+外加两项模型根本不需要读取的变换（可分别开关）：对可判定为散文的行，删去「谢谢」「请」「please」「thanks」等客套词；以及删除句末**连续的** `.`、`。`、`,`、`，`（一行末尾有几个就删几个；ASCII 省略号 `...` / `…` 除外）。它们作用于工具输出、你亲手输入的消息、助手的回复，以及历史对话——历史部分在组装请求时剥离，因此模型永远不会看到这些内容，而磁盘上的会话文件保持逐字节不变。
 
 ## 它保留了什么
 
@@ -49,9 +49,9 @@ dsh plugin --profile web add file:/path/to/dsh-oh-my-token
 
 **设置 → 省 Token** 是管理面板：
 
-- 每个变换一个开关（5 个命令过滤器、RTK 结构压缩、2 个检索变换、句号剥离器、系统提示词编辑）；
+- 每个变换一个开关（5 个命令过滤器、RTK 结构压缩、2 个检索变换、句末标点、客套词、系统提示词编辑）；
 - 高级配置：预算、`minChars`/`minGain`、检索阈值、超预算处理（`spill`/`rerun`/`none`）与 `logEvery`，以及插件总开关；
-- 句号剥离器的三档范围（`off` / 仅散文输出 / 所有散文）；
+- 散文变换（句末标点 / 客套词）共用的三档范围（`off` / 仅散文输出 / 所有散文）；
 - 节省记录：本次进程与历史累计、移除的 token 与字符、节省比例、按工具明细表，以及消息/回复剥离计数；
 - 选择被写入的配置目录，方便确认开关是否真的落盘。
 
@@ -86,7 +86,8 @@ dsh plugin --profile web add file:/path/to/dsh-oh-my-token
 | `retrieval.readOutlineOverLines` | `400` | 仅当行数超过此值且调用未带 `offset`/`limit` 时才生成大纲。 |
 | `retrieval.maxOutlineSymbols` | `60` | |
 | `retrieval.maxGrepMatches` | `50` | |
-| `prose.stripTrailingPeriod` | `true` | 删去散文行里的「谢谢」「请」等客套词，并删除末尾**连续的** `.` / `。` / `,` / `，`（省略号除外）。 |
+| `prose.stripTrailingPeriod` | `true` | 删除散文行末尾**连续的** `.` / `。` / `,` / `，`（省略号除外）。 |
+| `prose.stripPoliteness` | `true` | 删去散文行里的「谢谢」「请」「please」「thanks」等客套词。 |
 | `prose.scope` | `filtered` | `filtered` = 仅命令过滤器标记为散文的输出（如 `git log`）；`all`；`off`。 |
 | `recovery` | `spill` | `spill` \| `rerun` \| `none`。 |
 | `logEvery` | `0` | 每 N 次改写打印一条节省日志；`0` 为静默。 |

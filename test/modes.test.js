@@ -18,6 +18,7 @@ test('the row config seeds every switch', () => {
   assert.equal(modes.pytest, true);
   assert.equal(modes.readOutline, true);
   assert.equal(modes.rtk, true);
+  assert.equal(modes.politenessStrip, true);
 });
 
 test('effectiveConfig folds switches without disturbing budgets', () => {
@@ -29,7 +30,17 @@ test('effectiveConfig folds switches without disturbing budgets', () => {
   assert.equal(policy.retrieval.grepCap, false);
   assert.equal(policy.retrieval.readOutline, true);
   assert.equal(policy.rtk, true);
-  assert.deepEqual(policy.prose, { stripTrailingPeriod: true, scope: 'all' });
+  assert.deepEqual(policy.prose, { stripTrailingPeriod: true, stripPoliteness: true, scope: 'all' });
+});
+
+test('the politeness switch folds independently of punctuation', () => {
+  const row = resolveConfig({ prose: { stripPoliteness: false } });
+  const modes = resolveModes(row);
+  assert.equal(modes.politenessStrip, false);
+  assert.equal(modes.proseStrip, true);
+  const policy = effectiveConfig(row, { modes, proseScope: 'all' });
+  assert.equal(policy.prose.stripPoliteness, false);
+  assert.equal(policy.prose.stripTrailingPeriod, true);
 });
 
 test('the RTK switch folds into the effective config', () => {

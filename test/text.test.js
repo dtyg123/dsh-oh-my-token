@@ -68,6 +68,12 @@ test('politeness removal does not corrupt compounds or code', () => {
   assert.equal(stripTrailingPeriods('const x = 1,'), 'const x = 1,');
 });
 
+test('politeness and punctuation trim independently', () => {
+  assert.equal(stripTrailingPeriods('谢谢，请稍等。', { politeness: false }), '谢谢，请稍等');
+  assert.equal(stripTrailingPeriods('谢谢，请稍等。', { punctuation: false }), '稍等。');
+  assert.equal(stripTrailingPeriods('谢谢，请稍等。', { politeness: false, punctuation: false }), '谢谢，请稍等。');
+});
+
 test('stripAnsi and carriage-return repaints', () => {
   assert.equal(stripAnsi('\u001b[31mred\u001b[0m'), 'red');
   assert.equal(resolveCarriageReturns('10%\r50%\r100%'), '100%');

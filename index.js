@@ -218,21 +218,29 @@ export function apply(ctx, config) {
   ctx.on('agent/pre-step', async (payload, next) => {
     if (!state.enabled) return next();
     const sessionObject = payload?.agent?.session;
-    const wantProse = state.modes.proseStrip !== false;
+    const wantPunctuation = state.modes.proseStrip !== false;
+    const wantPoliteness = state.modes.politenessStrip !== false;
     const wantRtk = state.modes.rtk !== false;
-    if ((wantProse || wantRtk) && sessionObject && !patchedSessions.has(sessionObject)
+    if ((wantPunctuation || wantPoliteness || wantRtk) && sessionObject && !patchedSessions.has(sessionObject)
       && typeof sessionObject.deriveMessages === 'function') {
       const derive = sessionObject.deriveMessages.bind(sessionObject);
       sessionObject.deriveMessages = () => stripHistoryMessages(
         derive(),
         countHistoryStrip,
-        { prose: state.modes.proseStrip !== false, rtk: state.modes.rtk !== false },
+        {
+          punctuation: state.modes.proseStrip !== false,
+          politeness: state.modes.politenessStrip !== false,
+          rtk: state.modes.rtk !== false,
+        },
       );
       patchedSessions.add(sessionObject);
     }
     const decision = await next();
-    if (state.modes.proseStrip === false || decision?.kind !== 'enter') return decision;
-    const messages = stripClaimedMessages(decision.messages, payload?.messages, countStrip);
+    if ((!wantPunctuation && !wantPoliteness) || decision?.kind !== 'enter') return decision;
+    const messages = stripClaimedMessages(decision.messages, payload?.messages, countStrip, {
+      punctuation: wantPunctuation,
+      politeness: wantPoliteness,
+    });
     return messages === decision.messages ? decision : { ...decision, messages };
   });
 
@@ -250,7 +258,11 @@ export function apply(ctx, config) {
   // what the durable stream records, so rewriting it here covers both.
   ctx.on('llm/stream', (options, next) => {
     const stream = next();
-    return (!state.enabled || state.modes.proseStrip === false) ? stream : stripAssistantStream(stream, countStrip);
+    const punctuation = state.modes.proseStrip !== false;
+    const politeness = state.modes.politenessStrip !== false;
+    return (!state.enabled || (!punctuation && !politeness))
+      ? stream
+      : stripAssistantStream(stream, countStrip, { punctuation, politeness });
   }, { prepend: true });
 
   // -------------------------------------------------------------------------
