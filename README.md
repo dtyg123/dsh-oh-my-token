@@ -15,7 +15,7 @@ It internalises two ideas rather than bundling two tools:
 | --- | --- | --- |
 | 按命令过滤输出 / Per-command output filtering | [RTK](https://github.com/rtk-ai/rtk) | 解析模型已经运行过的命令，只保留结论和失败细节。纯 JS，无代理二进制。Parses the command the model already ran and keeps the verdict plus failure detail. Pure JS, no proxy binary. |
 | 检索符号而非整文件 / Retrieve symbols, not files | codegraph | 把超大且未指定范围的 `read` 变成符号大纲，并限制过大的 `grep` 结果。无 SQLite 图库、无 MCP 服务。Turns a large un-ranged `read` into a symbol outline and caps huge `grep` results. No SQLite graph, no MCP server. |
-| 按输出形状压缩 / Structure-aware compaction | [RTK](https://github.com/rtk-ai/rtk)，移植自 [`dsh-our-free-model`](https://github.com/Ebony-Vinyl/dsh-our-free-model) | 命令过滤器没命中时，再按内容形状压缩：git diff/status/log、构建日志、grep/find/ls/tree、重复日志、编号文件与搜索结果。纯 JS，无二进制。When no command filter matched, compact by output shape: git diff/status/log, build logs, grep/find/ls/tree, duplicate logs, numbered dumps and search lists. Pure JS, no binary. |
+| 按输出形状压缩 / Structure-aware compaction | [RTK](https://github.com/rtk-ai/rtk)（Apache-2.0） | 命令过滤器没命中时，再按内容形状压缩：git diff/status/log、构建日志、grep/find/ls/tree、重复日志、编号文件与搜索结果。纯 JS，无二进制。When no command filter matched, compact by output shape: git diff/status/log, build logs, grep/find/ls/tree, duplicate logs, numbered dumps and search lists. Pure JS, no binary. |
 
 外加一项模型根本不需要读取的变换：对可判定为散文的行，删去「谢谢」「请」「please」「thanks」等客套词，再删除句末**连续的** `.`、`。`、`,`、`，`（一行末尾有几个就删几个；ASCII 省略号 `...` / `…` 除外）。它作用于工具输出、你亲手输入的消息、助手的回复，以及历史对话——历史部分在组装请求时剥离，因此模型永远不会看到这些内容，而磁盘上的会话文件保持逐字节不变。
 
@@ -162,7 +162,7 @@ oh-my-token lint [config.json]  # validate a row config without starting DSH
 
 ## 致谢 / Acknowledgements
 
-- **[RTK](https://github.com/rtk-ai/rtk)（Apache-2.0）** — 按命令过滤工具输出的思路来自 RTK；本插件的命令过滤器与结构过滤器都是纯 JS 的独立实现（结构过滤器另移植自 [`dsh-our-free-model`](https://github.com/Ebony-Vinyl/dsh-our-free-model)）。The per-command output-filtering idea comes from RTK (Apache-2.0); this plugin reimplements it in pure JS (the structural filters are additionally ported from `dsh-our-free-model`).
+- **[RTK](https://github.com/rtk-ai/rtk)（Apache-2.0）** — 按命令过滤工具输出的思路来自 RTK；本插件的命令过滤器与结构过滤器都是纯 JS 实现。The per-command output-filtering idea comes from RTK (Apache-2.0); this plugin implements both in pure JS.
 - **[codegraph](https://github.com/isink17/codegraph)（MCP 服务，FSL-1.1）** — “先取符号地图，再按范围读取”的检索思路来自 codegraph；本插件用语言感知的正则做了无图库、无 MCP 服务的轻量实现。The "read the symbol map first, then a range" retrieval idea comes from codegraph; this plugin implements a lightweight version with language-aware regexes, with no graph database and no MCP server.
 - 许可证细节见 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) 与 [`LICENSES/Apache-2.0.txt`](LICENSES/Apache-2.0.txt)。See the third-party notices for the exact licence terms and the Apache-2.0 text.
 
@@ -170,4 +170,4 @@ oh-my-token lint [config.json]  # validate a row config without starting DSH
 
 MIT
 
-RTK 结构过滤器移植自 [`dsh-our-free-model`](https://github.com/Ebony-Vinyl/dsh-our-free-model)（MIT，© 2026 Ebony-Vinyl）；该部分的版权与许可声明保留在 `LICENSE` 与本文件的 `lib/rtk.js` 头部。The RTK structural filters are ported from `dsh-our-free-model` (MIT, © 2026 Ebony-Vinyl); that notice is retained in `LICENSE` and at the top of `lib/rtk.js`.
+RTK 结构过滤器按 Apache-2.0 使用；完整第三方声明（含 Apache-2.0 全文）见 `THIRD_PARTY_NOTICES.md` 与 `LICENSES/Apache-2.0.txt`。The RTK structural filters are used under Apache-2.0; the full third-party notices (including the Apache-2.0 text) are in `THIRD_PARTY_NOTICES.md` and `LICENSES/Apache-2.0.txt`.

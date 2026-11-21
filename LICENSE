@@ -22,12 +22,7 @@ SOFTWARE.
 
 ---
 
-Portions of this software (the RTK structural filters in `lib/rtk.js`) are
-derived from dsh-our-free-model (https://github.com/Ebony-Vinyl/dsh-our-free-model),
-licensed under the MIT License, Copyright (c) 2026 Ebony-Vinyl.
-
-The RTK structural filters are themselves a port of RTK
-(https://github.com/rtk-ai/rtk, Apache License 2.0). The Apache-2.0 text and the
-full third-party notices are in THIRD_PARTY_NOTICES.md and
-LICENSES/Apache-2.0.txt; they apply to the RTK-derived portion only and do not
-change the MIT license of the rest of this package.
+Third-party notices, including the MIT notice for the ported filter code and the
+Apache-2.0 text for the RTK-derived filters, are in THIRD_PARTY_NOTICES.md and
+LICENSES/Apache-2.0.txt. They apply to those portions only and do not change the
+MIT license of the rest of this package.
