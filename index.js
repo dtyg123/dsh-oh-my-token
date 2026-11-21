@@ -34,10 +34,7 @@
 import { resolveConfig } from './lib/config.js';
 import { compressToolResult, normalizeDecision } from './lib/gate.js';
 import { stripAssistantStream, stripClaimedMessages, stripHistoryMessages } from './lib/messages.js';
-import {
-  applySystemPrompt, describeLiveAssembly, describeRequest, emptySystemPrompt,
-  sanitizeSystemPrompt,
-} from './lib/system-prompt.js';
+import { applySystemPrompt, emptySystemPrompt, sanitizeSystemPrompt } from './lib/system-prompt.js';
 import {
   MODE_IDS, PROSE_SCOPES, effectiveConfig, readState, resolveModes, sanitizeModePatch,
   sanitizeScope, stateDirectory, writeState,
@@ -99,21 +96,6 @@ export function apply(ctx, config) {
 
   const session = emptyStats();
   let cumulative = readStats(profileDir);
-  // Read-only snapshot of the latest agent request, for the settings page.
-  let lastRequest;
-  // Live assembly fallback: on first launch there is no captured request yet,
-  // so read the currently registered sections instead. `preview` also keeps
-  // our own system-prompt edit from showing up as if it were original.
-  const previewPrompt = async () => {
-    try {
-      const assemble = ctx.get?.('systemPrompt')?.assemble?.bind(ctx.get('systemPrompt'));
-      if (typeof assemble !== 'function') return undefined;
-      return describeLiveAssembly(await assemble({ preview: true }));
-    } catch (error) {
-      ctx.logger?.warn?.(`oh-my-token: live prompt preview failed (${String(error?.message ?? error)})`);
-      return undefined;
-    }
-  };
   let timer;
   const flush = () => writeStats(profileDir, cumulative);
   const scheduleFlush = () => {
@@ -227,11 +209,10 @@ export function apply(ctx, config) {
   });
 
   // The official prompt seam: one extra section appended to, or replacing,
-  // the assembled system prompt. Context sections are left alone. A `preview`
-  // assembly (the settings page reading the original prompt) skips the edit.
+  // the assembled system prompt. Context sections are left alone.
   ctx.on('system-prompt/assemble', async (assembly, _context, next) => {
     const result = await next();
-    if (state.modes.systemPrompt !== true || _context?.preview) return result;
+    if (state.modes.systemPrompt !== true) return result;
     return applySystemPrompt(result, { enabled: true, ...state.systemPrompt });
   });
 
@@ -239,7 +220,6 @@ export function apply(ctx, config) {
   // `block-end` text is what the assembler uses for the assistant message and
   // what the durable stream records, so rewriting it here covers both.
   ctx.on('llm/stream', (options, next) => {
-    if (options?.sessionId !== undefined) lastRequest = describeRequest(options);
     const stream = next();
     return state.modes.proseStrip === false ? stream : stripAssistantStream(stream, countStrip);
   }, { prepend: true });
@@ -327,23 +307,6 @@ export function apply(ctx, config) {
         }
       },
     }), 'oh-my-token: stats route');
-
-    webCtx.effect(() => webCtx.webServer.register({
-      kind: 'exact',
-      path: '/dsh-oh-my-token/prompt',
-      handler: async (request, response) => {
-        if (request.method !== 'GET') {
-          response.writeHead(405, { allow: 'GET' });
-          response.end();
-          return;
-        }
-        // A captured request is the truth: read it verbatim. Before the first
-        // request exists, assemble the currently registered sections live so
-        // the page works from the first launch; `preview` keeps the edit off.
-        const snapshot = lastRequest ?? await previewPrompt();
-        sendJson(response, 200, snapshot ?? { prompt: '', tools: '', capturedAt: null, source: 'empty' });
-      },
-    }), 'oh-my-token: prompt route');
   });
 
   ctx.logger.info(
