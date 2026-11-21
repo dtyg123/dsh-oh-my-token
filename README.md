@@ -13,9 +13,8 @@ It internalises two ideas rather than bundling two tools:
 
 | 理念 / Idea | 来源 / Source | 本插件的做法 / What `dsh-oh-my-token` does instead |
 | --- | --- | --- |
-| 按命令过滤输出 / Per-command output filtering | [RTK](https://github.com/rtk-ai/rtk) | 解析模型已经运行过的命令，只保留结论和失败细节。纯 JS，无代理二进制。Parses the command the model already ran and keeps the verdict plus failure detail. Pure JS, no proxy binary. |
+| 按命令与输出形状压缩 / Command- and structure-aware compaction | [RTK](https://github.com/rtk-ai/rtk)（Apache-2.0） | 先解析模型已运行的命令，只保留结论和失败细节；命令过滤器没命中时，再按内容形状压缩：git diff/status/log、构建日志、grep/find/ls/tree、重复日志、编号文件与搜索结果。纯 JS，无二进制。Parses the command the model already ran and keeps the verdict plus failure detail; when no command filter matched, compacts by output shape: git diff/status/log, build logs, grep/find/ls/tree, duplicate logs, numbered dumps and search lists. Pure JS, no binary. |
 | 检索符号而非整文件 / Retrieve symbols, not files | codegraph | 把超大且未指定范围的 `read` 变成符号大纲，并限制过大的 `grep` 结果。无 SQLite 图库、无 MCP 服务。Turns a large un-ranged `read` into a symbol outline and caps huge `grep` results. No SQLite graph, no MCP server. |
-| 按输出形状压缩 / Structure-aware compaction | [RTK](https://github.com/rtk-ai/rtk)（Apache-2.0） | 命令过滤器没命中时，再按内容形状压缩：git diff/status/log、构建日志、grep/find/ls/tree、重复日志、编号文件与搜索结果。纯 JS，无二进制。When no command filter matched, compact by output shape: git diff/status/log, build logs, grep/find/ls/tree, duplicate logs, numbered dumps and search lists. Pure JS, no binary. |
 
 外加一项模型根本不需要读取的变换：对可判定为散文的行，删去「谢谢」「请」「please」「thanks」等客套词，再删除句末**连续的** `.`、`。`、`,`、`，`（一行末尾有几个就删几个；ASCII 省略号 `...` / `…` 除外）。它作用于工具输出、你亲手输入的消息、助手的回复，以及历史对话——历史部分在组装请求时剥离，因此模型永远不会看到这些内容，而磁盘上的会话文件保持逐字节不变。
 
