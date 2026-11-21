@@ -49,6 +49,12 @@ test('trailing whitespace survives period removal', () => {
   assert.equal(stripTrailingPeriods('Done.  '), 'Done  ');
 });
 
+test('every trailing sentence mark is removed, not just one', () => {
+  assert.equal(stripTrailingPeriods('Done..'), 'Done');
+  assert.equal(stripTrailingPeriods('你好。。。'), '你好');
+  assert.equal(stripTrailingPeriods('Really...'), 'Really...', 'an ASCII ellipsis is kept');
+});
+
 test('stripAnsi and carriage-return repaints', () => {
   assert.equal(stripAnsi('\u001b[31mred\u001b[0m'), 'red');
   assert.equal(resolveCarriageReturns('10%\r50%\r100%'), '100%');

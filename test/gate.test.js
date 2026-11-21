@@ -179,3 +179,33 @@ test('a filter fault leaves the original block in place', async () => {
   assert.equal(out, undefined);
   assert.equal(context.warnings.length, 1);
 });
+
+/** A realistic `ls -la` body that the command-aware filters do not claim. */
+function lsBody() {
+  const rows = ['total 40', 'drwxr-xr-x 2 user group 4096 Jan 10 10:00 src'];
+  for (let i = 0; i < 30; i += 1) rows.push(`-rw-r--r-- 1 user group ${1000 + i} Jan 10 10:00 file${i}.ts`);
+  return rows.join('\n');
+}
+
+test('RTK compacts an unclaimed long output when enabled', async () => {
+  const out = await compressToolResult(
+    exec('bash', { command: 'ls -la' }),
+    { isError: false },
+    textBlocks(lsBody()),
+    resolveConfig({ minChars: 10 }),
+    ctxWith(),
+  );
+  assert.ok(out !== undefined);
+  assert.ok(out[0].text.includes('Summary:'));
+});
+
+test('RTK is skipped when the switch is off', async () => {
+  const out = await compressToolResult(
+    exec('bash', { command: 'ls -la' }),
+    { isError: false },
+    textBlocks(lsBody()),
+    resolveConfig({ minChars: 10, rtk: false }),
+    ctxWith(),
+  );
+  assert.equal(out, undefined);
+});

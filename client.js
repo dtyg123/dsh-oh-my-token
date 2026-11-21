@@ -77,6 +77,7 @@ window.__ModuleLoader__.load({
         tsc: ['tsc 输出', '只保留 error TS 开头的行与总数，告警丢弃'],
         packageManager: ['包管理器安装', '成功时只留摘要行，失败时只留错误行'],
         generic: ['通用清理', '任意命令都安全：ANSI、回车重绘、重复行、进度条'],
+        rtk: ['RTK 风格压缩', '命令过滤器未命中时，再按结构压缩 git 输出、构建日志、grep/find/ls/tree 等'],
         readOutline: ['大文件大纲', '超过行数阈值且没给 offset/limit 的 read 只返回符号大纲'],
         grepCap: ['搜索结果截断', '匹配过多时只留前 N 条并说明剩余数量'],
         proseStrip: ['删除句末句号', '删除散文行、你的输入与助手回复（含历史消息）末尾的一个句号，省下每个句子的一个 token'],
@@ -519,7 +520,7 @@ window.__ModuleLoader__.load({
         h(ScopeCard, { title: text.session, summary: session, text }),
         h(ScopeCard, { title: text.cumulative, summary: cumulative, text }),
       ),
-      group(text.filters, ['pytest', 'git', 'tsc', 'packageManager', 'generic']),
+      group(text.filters, ['pytest', 'git', 'tsc', 'packageManager', 'generic', 'rtk']),
       group(text.retrieval, ['readOutline', 'grepCap']),
       h(Card, null,
         h('div', {

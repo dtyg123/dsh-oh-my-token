@@ -15,10 +15,11 @@ It internalises two ideas rather than bundling two tools:
 | --- | --- | --- |
 | 按命令过滤输出 / Per-command output filtering | [RTK](https://github.com/rtk-ai/rtk) | 解析模型已经运行过的命令，只保留结论和失败细节。纯 JS，无代理二进制。Parses the command the model already ran and keeps the verdict plus failure detail. Pure JS, no proxy binary. |
 | 检索符号而非整文件 / Retrieve symbols, not files | codegraph | 把超大且未指定范围的 `read` 变成符号大纲，并限制过大的 `grep` 结果。无 SQLite 图库、无 MCP 服务。Turns a large un-ranged `read` into a symbol outline and caps huge `grep` results. No SQLite graph, no MCP server. |
+| 按输出形状压缩 / Structure-aware compaction | [RTK](https://github.com/rtk-ai/rtk)，移植自 [`dsh-our-free-model`](https://github.com/Ebony-Vinyl/dsh-our-free-model) | 命令过滤器没命中时，再按内容形状压缩：git diff/status/log、构建日志、grep/find/ls/tree、重复日志、编号文件与搜索结果。纯 JS，无二进制。When no command filter matched, compact by output shape: git diff/status/log, build logs, grep/find/ls/tree, duplicate logs, numbered dumps and search lists. Pure JS, no binary. |
 
-外加一项模型根本不需要读取的变换：对可判定为散文的行，删除句末的 `.` 或 `。`。它作用于工具输出、你亲手输入的消息、助手的回复，以及历史对话——历史部分在组装请求时剥离，因此模型永远不会看到这些句号，而磁盘上的会话文件保持逐字节不变。
+外加一项模型根本不需要读取的变换：对可判定为散文的行，删除句末**连续的** `.` 与 `。`（一行末尾有几个就删几个；ASCII 省略号 `...` / `…` 除外）。它作用于工具输出、你亲手输入的消息、助手的回复，以及历史对话——历史部分在组装请求时剥离，因此模型永远不会看到这些句号，而磁盘上的会话文件保持逐字节不变。
 
-Plus one transformation the model never needs to read: a sentence-final `.` or `。` on a line that is provably prose. It applies to tool output, your own typed messages, the assistant's replies, and past turns — the last of these is stripped while the request is assembled, so the model never sees those periods while the stored session files stay byte-for-byte unchanged.
+Plus one transformation the model never needs to read: the run of **sentence-final** `.` and `。` marks on a line that is provably prose (every trailing mark is removed, not just one; an ASCII ellipsis `...` / `…` is excluded). It applies to tool output, your own typed messages, the assistant's replies, and past turns — the last of these is stripped while the request is assembled, so the model never sees those periods while the stored session files stay byte-for-byte unchanged.
 
 ## 它保留了什么 / What it keeps
 
@@ -32,6 +33,7 @@ Filtering is only allowed to drop text that carries no decision. Concretely:
 - `tsc` → 每条 `error TSxxxx` 加总数；告警丢弃。Every `error TSxxxx` line and a total count; warnings drop.
 - `npm/pnpm/yarn/bun/pip/uv/poetry` 安装 → 成功留摘要行，失败留错误行。The summary line, or the error lines on failure.
 - 其他命令 → 只做 ANSI、回车重绘、重复行与进度条清理。命令字符串永不改写。ANSI, carriage-return repaints, repeated lines and progress bars only. The command string is never rewritten.
+- 命令过滤器没命中时（或对历史中的旧工具结果），RTK 结构压缩按形状接管：`git diff/status/log` 保留文件名、计数与 hunk 头；构建日志保留错误、告警与摘要；`grep/find/ls/tree/search-list` 按文件/目录分组并给出计数；重复日志折叠；超长无结构内容保留头尾。它只收缩，不放大。When no command filter matched (or for old tool results in history), RTK structure compaction takes over by shape: git diff/status/log keep names, counts and hunk headers; build logs keep errors, warnings and the summary; grep/find/ls/tree/search-list group and count; duplicate log lines collapse; an unstructured blob keeps head and tail. It only ever shrinks.
 
 结果仍超预算时，全文通过 `ctx.spillStore` 保存，标记会告诉模型去哪里取。如果没挂载 spill store，标记会说明如何重跑或重新读取——插件绝不丢弃无法恢复的文本。
 
@@ -61,7 +63,7 @@ To change a budget, add the field under that row in the profile's `cordis.patch.
 
 **设置 → 省 Token**（**Settings → 省 Token**）是管理面板：
 
-- 每个变换一个开关（5 个命令过滤器、2 个检索变换、句号剥离器、系统提示词编辑）；One switch per transform (5 command filters, 2 retrieval transforms, the period trimmer, the system-prompt editor);
+- 每个变换一个开关（5 个命令过滤器、RTK 结构压缩、2 个检索变换、句号剥离器、系统提示词编辑）；One switch per transform (5 command filters, RTK structure compaction, 2 retrieval transforms, the period trimmer, the system-prompt editor);
 - 句号剥离器的三档范围（`off` / 仅散文输出 / 所有散文）；A three-way scope for the period trimmer (`off` / prose outputs only / all prose);
 - 节省记录：本次进程与历史累计、移除的 token 与字符、节省比例、按工具明细表，以及消息/回复剥离计数；The savings record: this process and all time, tokens and characters removed, the saved share, a per-tool table, and a message/reply strip count;
 - 选择被写入的配置目录，方便确认开关是否真的落盘。The profile directory the choice is written to, so you can see whether a switch actually persisted.
@@ -105,10 +107,11 @@ At the bottom of Settings → 省 Token, the 系统提示词 card lets you enabl
 | `minChars` | `800` | 小于此值的结果不动（清理不值得冒险）。Results below this are left alone (cleanup is not worth the risk). |
 | `minGain` | `0.05` | 丢弃节省低于此比例的改写；散文句号改写始终保留。Discard a rewrite that saves less than this fraction. A prose-period rewrite is kept regardless. |
 | `filters.*` | 全部 `true` | 各过滤器开关：`pytest`、`git`、`tsc`、`packageManager`、`generic`。Per-filter switches. |
+| `rtk` | `true` | 命令过滤器未命中时，按输出形状再做一层 RTK 结构压缩。也可在设置页面关闭。Enable RTK structure compaction when no command filter matched; also a Settings switch. |
 | `retrieval.readOutlineOverLines` | `400` | 仅当行数超过此值且调用未带 `offset`/`limit` 时才生成大纲。Outline a `read` only above this line count, and only when the call had no `offset`/`limit`. |
 | `retrieval.maxOutlineSymbols` | `60` | |
 | `retrieval.maxGrepMatches` | `50` | |
-| `prose.stripTrailingPeriod` | `true` | 删除散文行末尾的一个 `.` / `。`。Remove one sentence-final `.` / `。` from prose lines. |
+| `prose.stripTrailingPeriod` | `true` | 删除散文行末尾**连续的** `.` / `。`（省略号除外）。Remove every trailing `.` / `。` from prose lines (an ASCII ellipsis is kept). |
 | `prose.scope` | `filtered` | `filtered` = 仅命令过滤器标记为散文的输出（如 `git log`）；`all`；`off`。 |
 | `recovery` | `spill` | `spill` \| `rerun` \| `none`。 |
 | `logEvery` | `0` | 每 N 次改写打印一条节省日志；`0` 为静默。Log a savings line every N rewritten results; `0` is quiet. |
@@ -143,7 +146,7 @@ oh-my-token lint [config.json]  # validate a row config without starting DSH
 
 ## 设计约束 / Design constraints
 
-- **工具结果只追加 / Append-only tool results.** 替换发生在 `tools/post-execute`，因此被记录的就是替换后的内容。不用 `sessionProjections`、不做追溯修改、不会让前缀缓存失效。聊天文本则有意不同：历史句号只在派生请求（`session.deriveMessages()`）中剥离，从不写入持久化日志。The replacement is produced in `tools/post-execute`, so it is what gets logged. No `sessionProjections`, no retroactive edits, no prefix cache invalidation. Chat text is different by design: old periods are removed only from the derived request (`session.deriveMessages()`), never from the durable session log.
+- **工具结果只追加 / Append-only tool results.** 替换发生在 `tools/post-execute`，因此被记录的就是替换后的内容。不用 `sessionProjections`、不做追溯修改、不会让前缀缓存失效。聊天文本与旧工具结果则有意不同：历史句号与旧工具结果的 RTK 压缩只在派生请求（`session.deriveMessages()`）中发生，从不写入持久化日志。The replacement is produced in `tools/post-execute`, so it is what gets logged. No `sessionProjections`, no retroactive edits, no prefix cache invalidation. Chat text and old tool results are different by design: historical periods and RTK compaction of old tool results happen only in the derived request (`session.deriveMessages()`), never in the durable session log.
 - **不改写参数 / No argument rewriting.** DSH 在工具管线里禁止这样做，改写过的命令是另一个可能出错的地方。DSH forbids it in the tool pipeline, and a rewritten command is a second thing that can be wrong.
 - **零新依赖 / No new dependencies.** `index.js` 只引入自己的文件。`index.js` imports only its own files.
 - **过滤器故障不等于工具失败 / A filter fault is not a tool failure.** 每个分支都有保护；出错时返回原始 decision。Every branch is wrapped; on error the original decision is returned untouched.
@@ -159,3 +162,5 @@ oh-my-token lint [config.json]  # validate a row config without starting DSH
 ## 许可 / Licence
 
 MIT
+
+RTK 结构过滤器移植自 [`dsh-our-free-model`](https://github.com/Ebony-Vinyl/dsh-our-free-model)（MIT，© 2026 Ebony-Vinyl）；该部分的版权与许可声明保留在 `LICENSE` 与本文件的 `lib/rtk.js` 头部。The RTK structural filters are ported from `dsh-our-free-model` (MIT, © 2026 Ebony-Vinyl); that notice is retained in `LICENSE` and at the top of `lib/rtk.js`.

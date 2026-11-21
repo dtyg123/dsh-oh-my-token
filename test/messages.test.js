@@ -127,3 +127,25 @@ test('the stream transform skips non-text block-end and untouched text', async (
   assert.equal(out[0], toolEnd);
   assert.equal(out[1], plain);
 });
+
+/** A long `ls -la` tool result, which the RTK filter recognises. */
+function toolBody() {
+  const rows = ['total 40', 'drwxr-xr-x 2 user group 4096 Jan 10 10:00 src'];
+  for (let i = 0; i < 30; i += 1) rows.push(`-rw-r--r-- 1 user group ${1000 + i} Jan 10 10:00 file${i}.ts`);
+  return rows.join('\n');
+}
+
+test('old tool results are compacted on the derived copy only', () => {
+  const tool = { id: 't1', role: 'tool', toolCallId: 'c1', content: [{ type: 'text', text: toolBody() }] };
+  const calls = [];
+  const out = stripHistoryMessages([tool], (...args) => calls.push(args), { rtk: true, prose: false });
+  assert.notEqual(out[0], tool);
+  assert.ok(out[0].content[0].text.includes('Summary:'));
+  assert.ok(tool.content[0].text.includes('total 40'), 'the durable record is untouched');
+  assert.equal(calls.length, 1);
+});
+
+test('tool results are left alone when RTK is off', () => {
+  const tool = { id: 't1', role: 'tool', toolCallId: 'c1', content: [{ type: 'text', text: toolBody() }] };
+  assert.equal(stripHistoryMessages([tool], undefined, { rtk: false })[0], tool);
+});

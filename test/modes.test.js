@@ -17,6 +17,7 @@ test('the row config seeds every switch', () => {
   assert.equal(modes.proseStrip, false);
   assert.equal(modes.pytest, true);
   assert.equal(modes.readOutline, true);
+  assert.equal(modes.rtk, true);
 });
 
 test('effectiveConfig folds switches without disturbing budgets', () => {
@@ -27,7 +28,15 @@ test('effectiveConfig folds switches without disturbing budgets', () => {
   assert.equal(policy.filters.git, false);
   assert.equal(policy.retrieval.grepCap, false);
   assert.equal(policy.retrieval.readOutline, true);
+  assert.equal(policy.rtk, true);
   assert.deepEqual(policy.prose, { stripTrailingPeriod: true, scope: 'all' });
+});
+
+test('the RTK switch folds into the effective config', () => {
+  const row = resolveConfig({});
+  const modes = resolveModes(row);
+  assert.equal(resolveModes(resolveConfig({ rtk: false })).rtk, false);
+  assert.equal(effectiveConfig(row, { modes: { ...modes, rtk: false }, proseScope: 'filtered' }).rtk, false);
 });
 
 test('untrusted switch patches keep only known booleans', () => {

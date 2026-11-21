@@ -213,10 +213,16 @@ export function apply(ctx, config) {
   // keeps the record and the bytes the model reads identical.
   ctx.on('agent/pre-step', async (payload, next) => {
     const sessionObject = payload?.agent?.session;
-    if (state.modes.proseStrip !== false && sessionObject && !patchedSessions.has(sessionObject)
+    const wantProse = state.modes.proseStrip !== false;
+    const wantRtk = state.modes.rtk !== false;
+    if ((wantProse || wantRtk) && sessionObject && !patchedSessions.has(sessionObject)
       && typeof sessionObject.deriveMessages === 'function') {
       const derive = sessionObject.deriveMessages.bind(sessionObject);
-      sessionObject.deriveMessages = () => stripHistoryMessages(derive(), countHistoryStrip);
+      sessionObject.deriveMessages = () => stripHistoryMessages(
+        derive(),
+        countHistoryStrip,
+        { prose: state.modes.proseStrip !== false, rtk: state.modes.rtk !== false },
+      );
       patchedSessions.add(sessionObject);
     }
     const decision = await next();

@@ -28,3 +28,10 @@ test('type and range checks reject silently wrong values', () => {
   assert.throws(() => resolveConfig({ filters: { pytest: 'yes' } }), /filters\.pytest must be true or false/);
   assert.throws(() => resolveConfig([]), /config must be a mapping/);
 });
+
+test('RTK compaction is on by default and can be switched off', () => {
+  assert.equal(DEFAULT_CONFIG.rtk, true);
+  assert.equal(resolveConfig({}).rtk, true);
+  assert.equal(resolveConfig({ rtk: false }).rtk, false);
+  assert.throws(() => resolveConfig({ rtk: 'yes' }), /rtk must be true or false/);
+});

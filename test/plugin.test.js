@@ -156,7 +156,7 @@ test('GET state lists every switch and the prose scope', async () => {
   const state = response.json();
   assert.equal(response.status, 200);
   assert.deepEqual(state.modes.map((mode) => mode.id), [
-    'pytest', 'git', 'tsc', 'packageManager', 'generic', 'readOutline', 'grepCap', 'proseStrip', 'systemPrompt',
+    'pytest', 'git', 'tsc', 'packageManager', 'generic', 'rtk', 'readOutline', 'grepCap', 'proseStrip', 'systemPrompt',
   ]);
   assert.ok(state.modes.filter((mode) => mode.id !== 'systemPrompt').every((mode) => mode.on === true));
   assert.equal(state.modes.find((mode) => mode.id === 'systemPrompt').on, false);
