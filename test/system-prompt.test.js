@@ -29,6 +29,20 @@ test('segments append one literal tail section per card, in order', () => {
   assert.equal(out.variables, input.variables);
 });
 
+test('known variables are replaced in segment text, unknown ones stay literal', () => {
+  const out = applySystemPrompt({
+    sections: [],
+    contexts: [],
+    variables: { provider: 'deepseek', model: 'deepseek-chat' },
+  }, {
+    enabled: true,
+    segments: [{ text: 'You run on {{provider}}/{{model}}, but {{unknown}} stays.' }],
+  });
+  assert.equal(out.sections.length, 1);
+  assert.equal(out.sections[0].text, 'You run on deepseek/deepseek-chat, but {{unknown}} stays.');
+  assert.equal(out.sections[0].interpolate, false, 'no second interpolation pass');
+});
+
 test('empty, whitespace-only, or missing segments are skipped', () => {
   const input = assembly();
   const out = applySystemPrompt(input, {

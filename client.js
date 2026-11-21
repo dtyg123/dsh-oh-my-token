@@ -60,7 +60,8 @@ window.__ModuleLoader__.load({
         all: '所有散文',
       },
       systemPrompt: '系统提示词',
-      systemPromptHint: '把提示词拆成若干小段（卡片），从上到下按顺序拼到现有系统提示词末尾。{{变量}} 保持字面量。保存后下一次请求生效。',
+      systemPromptHint: '把提示词拆成若干小段（卡片），从上到下按顺序拼到现有系统提示词末尾，保存后下一次请求生效。',
+      systemPromptVariables: '{{变量}}：{{provider}} 会替换为当前模型供应商、{{model}} 替换为当前模型名；写其他写法不替换，保持字面量，也不会因此报错。',
       systemPromptPlaceholder: '写下这一段的提示词…',
       addSegment: '添加一小段',
       moveUp: '上移',
@@ -593,6 +594,12 @@ window.__ModuleLoader__.load({
             color: 'var(--dsw-alias-label-secondary)',
           },
         }, text.systemPromptHint),
+        h('div', {
+          style: {
+            marginTop: '3px', fontSize: '11px', lineHeight: '16px',
+            color: 'var(--dsw-alias-label-secondary)',
+          },
+        }, text.systemPromptVariables),
       ),
       h(Card, null,
         h('div', { style: { fontSize: '12px', fontWeight: 600, marginBottom: '4px' } }, text.byTool),
