@@ -160,6 +160,11 @@ oh-my-token lint [config.json]  # validate a row config without starting DSH
 - **符号图 / A symbol graph.** 大纲来自语言感知的正则。LSP 解析器更好，但那也是本插件拒绝引入的构建依赖。Outlines come from language-aware regexes. An LSP-backed resolver would be better; it is also a build dependency this plugin refuses to take.
 - **输入框下方的小卡片 / A composer-dock chip.** 页面放在设置里——人找策略时会去那里；输入框下方的卡片会在每个屏幕重复同样的数字。The page is under Settings, where a person looks for a policy; a chip below the composer would repeat the same numbers on every screen.
 
+## 致谢 / Acknowledgements
+
+- **[RTK](https://github.com/rtk-ai/rtk)** — 按命令过滤工具输出的思路来自 RTK；本插件的命令过滤器与结构过滤器都是纯 JS 的独立实现（结构过滤器另移植自 [`dsh-our-free-model`](https://github.com/Ebony-Vinyl/dsh-our-free-model)）。The per-command output-filtering idea comes from RTK; this plugin reimplements it in pure JS (the structural filters are additionally ported from `dsh-our-free-model`).
+- **codegraph（MCP 服务）** — “先取符号地图，再按范围读取”的检索思路来自 codegraph；本插件用语言感知的正则做了无图库、无 MCP 服务的轻量实现。The "read the symbol map first, then a range" retrieval idea comes from codegraph; this plugin implements a lightweight version with language-aware regexes, with no graph database and no MCP server.
+
 ## 许可 / Licence
 
 MIT
