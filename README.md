@@ -163,7 +163,7 @@ oh-my-token lint [config.json]  # validate a row config without starting DSH
 ## 致谢 / Acknowledgements
 
 - **[RTK](https://github.com/rtk-ai/rtk)** — 按命令过滤工具输出的思路来自 RTK；本插件的命令过滤器与结构过滤器都是纯 JS 的独立实现（结构过滤器另移植自 [`dsh-our-free-model`](https://github.com/Ebony-Vinyl/dsh-our-free-model)）。The per-command output-filtering idea comes from RTK; this plugin reimplements it in pure JS (the structural filters are additionally ported from `dsh-our-free-model`).
-- **codegraph（MCP 服务）** — “先取符号地图，再按范围读取”的检索思路来自 codegraph；本插件用语言感知的正则做了无图库、无 MCP 服务的轻量实现。The "read the symbol map first, then a range" retrieval idea comes from codegraph; this plugin implements a lightweight version with language-aware regexes, with no graph database and no MCP server.
+- **[codegraph](https://github.com/isink17/codegraph)（MCP 服务）** — “先取符号地图，再按范围读取”的检索思路来自 codegraph；本插件用语言感知的正则做了无图库、无 MCP 服务的轻量实现。The "read the symbol map first, then a range" retrieval idea comes from codegraph; this plugin implements a lightweight version with language-aware regexes, with no graph database and no MCP server.
 
 ## 许可 / Licence
 
