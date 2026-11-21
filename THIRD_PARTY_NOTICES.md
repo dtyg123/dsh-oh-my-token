@@ -9,41 +9,14 @@ the works below; their notices are reproduced here as required.
 - License: Apache License 2.0 (full text: [`LICENSES/Apache-2.0.txt`](LICENSES/Apache-2.0.txt))
 - Copyright: the RTK contributors.
 
-`lib/rtk.js` is a JavaScript port of the RTK structural filters, obtained
-through an MIT-licensed intermediate port (its notice is below), which ported
-them from the Rust RTK tool. Changes in this port: translated to JavaScript,
-adapted to this plugin's module style, and the diff-recovery marker now names
-this plugin's own recovery path instead of the `rtk` binary. The filters'
-numeric thresholds and output shapes are kept close to the originals.
+`lib/rtk.js` is an independent JavaScript implementation of the RTK structural
+filter behaviour, written from the behaviour of the RTK tool (Apache-2.0). No
+third-party JavaScript port was copied. The numeric thresholds and output shapes
+are kept compatible with RTK; the diff-recovery marker names this plugin's own
+recovery path instead of the `rtk` binary.
 
-The RTK-derived portion remains available under Apache-2.0; the rest of this
-package is MIT. Apache-2.0 is compatible with MIT and does not change this
-package's MIT license.
-
-### Ported-by notice (MIT)
-
-The ported filter code was obtained through a third-party MIT-licensed port.
-Its notice is retained here as required:
-
-Copyright (c) 2026 Ebony-Vinyl
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+The RTK-style portion is used under Apache-2.0; the rest of this package is MIT.
+Apache-2.0 is compatible with MIT and does not change this package's MIT license.
 
 ## codegraph — Functional Source License 1.1
 
