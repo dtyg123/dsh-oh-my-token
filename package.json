@@ -1,6 +1,6 @@
 {
   "name": "dsh-oh-my-token",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "Native token admission for DeepSeek Harness: command-output filters, retrieval-style reads, a conservative prose trimmer, optional system-prompt editing, and a settings page that reports what was saved. No RTK binary, no codegraph server.",
   "type": "module",
   "main": "./index.js",

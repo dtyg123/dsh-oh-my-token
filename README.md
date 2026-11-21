@@ -81,14 +81,14 @@ Three exact routes back the page: `/dsh-oh-my-token/state`, `/dsh-oh-my-token/st
 - **追加**：保留原有所有 section，在末尾加一个 `interpolate: false` 的 section——文本里的 `{{...}}` 保持字面量，不会被当作未知变量而报错；
 - **整体替换**：只保留你写的那一段；
 - 运行时上下文快照不受影响；改动在下一次请求生效，无需重启。
-- 「读取原提示词」「读取工具说明」两个按钮会从最近一次真实请求里取出当前系统提示词和工具 schema（含 name / description / parameters），**追加**到文本框末尾，方便在原内容基础上改写。先发一条消息再读取。
+- 「读取原提示词」「读取工具说明」两个按钮会取出当前系统提示词和工具 schema（含 name / description / parameters），**追加**到文本框末尾，方便在原内容基础上改写。已有真实请求时读的是最近一次的**逐字快照**；尚未发过任何消息时（首次使用），会按当前注册**实时组装**一份，无需先发消息。读取的是未注入定制文本的原始提示词。
 
 At the bottom of Settings → 省 Token, the 系统提示词 card lets you enable the switch, pick append or replace, type text, and save. The text is injected through DSH's official `system-prompt/assemble` waterfall:
 
 - **append** keeps every existing section and adds one `interpolate: false` section at the end — `{{...}}` in your text stays literal instead of throwing as an unknown variable;
 - **replace** keeps only your text;
 - runtime context snapshots are untouched, and changes apply on the next request with no restart.
-- The 「读取原提示词」 and 「读取工具说明」 buttons pull the current system prompt and tool schemas (name / description / parameters) from the latest real request and **append** them to the text box, so you can edit on top of what is actually in use. Send a message first to capture a request.
+- The 「读取原提示词」 and 「读取工具说明」 buttons pull the current system prompt and tool schemas (name / description / parameters) and **append** them to the text box, so you can edit on top of what is actually in use. With a real request captured, they read its verbatim snapshot; before any message has been sent (first use), they live-assemble from current registrations — no prior message needed. The buttons always read the original prompt without your injected text.
 
 ## 配置 / Configuration
 
