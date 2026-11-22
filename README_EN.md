@@ -132,6 +132,14 @@ oh-my-token lint [config.json]  # validate a row config without starting DSH
 - **A symbol graph.** Outlines come from language-aware regexes. An LSP-backed resolver would be better; it is also a build dependency this plugin refuses to take.
 - **A composer-dock chip.** The page is under Settings, where a person looks for a policy; a chip below the composer would repeat the same numbers on every screen.
 
+## Sponsor
+
+This plugin is fully open-source under the MIT licence and maintained on personal time. If it saves you enough tokens to feel worth a coffee, you can support me here:
+
+![QR for sponsorship](docs/sponsor-qrcode.jpg)
+
+Not required, not expected, and it doesn't buy any promises — the code is already yours.
+
 ## Acknowledgements
 
 - **[RTK](https://github.com/rtk-ai/rtk) (Apache-2.0)** — the per-command output-filtering idea comes from RTK; this plugin implements both the command filters and the structural filters in pure JS.
