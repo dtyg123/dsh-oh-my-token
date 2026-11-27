@@ -156,3 +156,31 @@ test('tool results are left alone when RTK is off', () => {
   const tool = { id: 't1', role: 'tool', toolCallId: 'c1', content: [{ type: 'text', text: toolBody() }] };
   assert.equal(stripHistoryMessages([tool], undefined, { rtk: false })[0], tool);
 });
+
+test('a user edit rewrites the derived message while the log stays put', () => {
+  const user = userMessage('The original question.');
+  const edits = new Map([['m1', 'The edited question']]);
+  const out = stripHistoryMessages([user], undefined, { rtk: false, edits });
+  assert.equal(out[0].content[0].text, 'The edited question');
+  assert.equal(user.content[0].text, 'The original question.', 'the source message is untouched');
+});
+
+test('an edit applies even when both prose switches are off', () => {
+  const user = userMessage('Some long text that does not end with a mark');
+  const edits = new Map([['m1', 'rewritten']]);
+  const out = stripHistoryMessages([user], undefined, { rtk: false, prose: false, edits });
+  assert.equal(out[0].content[0].text, 'rewritten');
+});
+
+test('edits never touch tool results or other roles', () => {
+  const tool = { id: 'm1', role: 'tool', content: [{ type: 'text', text: 'tool output' }] };
+  const edits = new Map([['m1', 'hijacked']]);
+  assert.equal(stripHistoryMessages([tool], undefined, { rtk: false, edits })[0], tool);
+});
+
+test('a custom word list replaces words in chat text', () => {
+  const msg = userMessage('谢谢，请稍等。');
+  const words = [{ word: '请', replace: '拜托' }, { word: '谢谢', replace: '' }];
+  const out = stripUserMessage(msg, undefined, { words, politeness: true, punctuation: true });
+  assert.equal(out.content[0].text, '拜托稍等');
+});

@@ -153,6 +153,71 @@ test('autoDetectFilter refuses prose and short input', () => {
   assert.equal(rtkCompress(''), null);
 });
 
+test('eslint compact-formatter output groups by file', () => {
+  const body = [
+    'src/a.ts:3:10:  \'x\' is defined but never used.  no-unused-vars',
+    'src/a.ts:7:2:   Trailing spaces found.  eol-last',
+    'src/b.ts:1:1:   Unexpected semicolon.  no-extra-semi',
+    'src/b.ts:9:4:   Use of eval is strongly discouraged.  no-eval',
+    'src/b.ts:12:4:  \'y\' is defined but never used.  no-unused-vars',
+    ...Array.from({ length: 30 }, (_, i) => `src/c.ts:${i + 1}:1:  More lint findings number ${i}.  rule-${i}`),
+    '',
+    '✖ 35 problems (30 errors, 5 warnings)',
+  ].join('\n');
+  const out = rtkCompress(body);
+  assert.ok(out !== null);
+  assert.equal(out.id, 'eslint');
+  assert.ok(out.text.includes('35 problem(s) in 3 file(s):'));
+  assert.ok(out.text.includes('[file] src/c.ts (30):'));
+  assert.ok(out.text.includes('+25 more'));
+  assert.ok(out.text.length < body.length);
+});
+
+test('cargo build output counts the progress and keeps the verdicts', () => {
+  const body = [
+    ...Array.from({ length: 40 }, (_, i) => `   Compiling crate${i} v0.1.0`),
+    'error[E0599]: no method named `fetch` found',
+    "  --> src/main.rs:12:5",
+    '   = help: items from traits can only be used if some trait is in scope',
+    'error: could not compile `demo` (bin)',
+  ].join('\n');
+  const out = rtkCompress(body);
+  assert.ok(out !== null);
+  assert.equal(out.id, 'cargo');
+  assert.ok(out.text.includes('Compiled 40 crate(s)'));
+  assert.ok(out.text.includes('error[E0599]'));
+  assert.ok(!out.text.includes('Compiling crate1'));
+});
+
+test('go test folds passing packages into one verdict line', () => {
+  const body = [
+    ...Array.from({ length: 30 }, (_, i) => `ok  \tservice/pkg${i}\t0.${i}1s`),
+    '?   \tservice/empty\t[no test files]',
+  ].join('\n');
+  const out = rtkCompress(body);
+  assert.ok(out !== null);
+  assert.equal(out.id, 'go-test');
+  assert.ok(out.text.startsWith('✓ go test: 30 package(s) passed; 1 without tests'));
+  assert.equal(out.text.split('\n').length, 1);
+});
+
+test('go test failure keeps the detail from the first failure on', () => {
+  const body = [
+    'ok  \talpha\t0.1s',
+    'FAIL\tbeta\t0.2s',
+    '--- FAIL: TestThing (0.01s)',
+    '\t    thing_test.go:10: got 2, want 1',
+    ...Array.from({ length: 200 }, (_, i) => `\tgoroutine ${i + 1} [running]:`),
+    'FAIL',
+  ].join('\n');
+  const out = rtkCompress(body);
+  assert.ok(out !== null);
+  assert.equal(out.id, 'go-test');
+  assert.ok(out.text.includes('--- FAIL: TestThing'));
+  assert.ok(out.text.includes('got 2, want 1'));
+  assert.ok(out.text.length < body.length);
+});
+
 test('rtkCompress returns null when there is no gain', () => {
   const prose = `A paragraph of ordinary prose. ${'More words that are not a tool shape. '.repeat(20)}`;
   assert.equal(rtkCompress(prose), null);

@@ -13,7 +13,12 @@ It internalises two ideas rather than bundling two tools:
 | Command- and structure-aware compaction | [RTK](https://github.com/rtk-ai/rtk) (Apache-2.0) | Parses the command the model already ran and keeps the verdict plus failure detail; when no command filter matched, compacts by output shape: git diff/status/log, build logs, grep/find/ls/tree, duplicate logs, numbered dumps and search lists. Pure JS, no binary. |
 | Retrieve symbols, not files | [codegraph](https://github.com/isink17/codegraph) | Turns a large un-ranged `read` into a symbol outline and caps huge `grep` results. No SQLite graph, no MCP server. |
 
-Plus two transformations the model never needs to read (independently switchable): on a line that is provably prose, politeness words (`谢谢`, `请`, `please`, `thanks`, …) are dropped, and the run of **sentence-final** `.`, `。`, `,` and `，` marks is removed. They apply to tool output, your own typed messages, the assistant's replies, and past turns — the last of these is stripped while the request is assembled, so the model never sees those bytes while the stored session files stay byte-for-byte unchanged.
+Plus two transformations the model never needs to read (independently switchable): on a line that is provably prose, a configurable word table deletes or replaces words (`谢谢`, `请`, `please`, `thanks`, … — delete by default, or swap one word for another), and punctuation is tidied: a mark opening a paragraph is dropped, two stuck-together marks collapse to one (a comma and a period keep the period; the same strength rule applies to the rest), and the run of **sentence-final** `.`, `。`, `,` and `，` marks is removed (an ASCII ellipsis is kept). They apply to tool output, your own typed messages, the assistant's replies, and past turns — the last of these is stripped while the request is assembled, so the model never sees those bytes while the stored session files stay byte-for-byte unchanged.
+
+Plus two extras on the same derived path:
+
+- **Conversation editing** — rewrite any recent message from the settings page. The rewrite is only carried in the next request; it is never written to the durable log, and "restore" puts the original back.
+- **Transform record** — the settings page lists what each recent prose pass actually removed and added (which words, how many marks), so the trimming is auditable, not a black box.
 
 ## What it keeps
 
@@ -25,7 +30,7 @@ Filtering is only allowed to drop text that carries no decision. Concretely:
 - `tsc` → every `error TSxxxx` line and a total count; warnings drop.
 - `npm/pnpm/yarn/bun/pip/uv/poetry` install → the summary line, or the error lines on failure.
 - Any other command → ANSI, carriage-return repaints, repeated lines and progress bars only. The command string is never rewritten.
-- When no command filter matched (or for old tool results in history), RTK structure compaction takes over by shape: git diff/status/log keep names, counts and hunk headers; build logs keep errors, warnings and the summary; grep/find/ls/tree/search-list group and count; duplicate log lines collapse; an unstructured blob keeps head and tail. It only ever shrinks.
+- When no command filter matched (or for old tool results in history), RTK structure compaction takes over by shape: git diff/status/log keep names, counts and hunk headers; build logs keep errors, warnings and the summary; `cargo build/test` folds the Compiling/Checking progress and keeps `error[E…]`, `test result:` and Finished; `go test` collapses every `ok`/`?` package into one verdict line and, on failure, keeps the detail from the first FAIL; `eslint` compact output groups and counts by file; grep/find/ls/tree/search-list group and count; duplicate log lines collapse; an unstructured blob keeps head and tail. It only ever shrinks.
 
 When a result is still over budget, the full text is saved through `ctx.spillStore` and the marker tells the model where it went. If no spill store is mounted, the marker says how to re-run or re-read instead — the plugin never elides text it cannot recover.
 
@@ -49,9 +54,13 @@ To change a budget, add the field under that row in the profile's `cordis.patch.
 
 **Settings → 省 Token** is the management panel:
 
-- One switch per transform (5 command filters, RTK structure compaction, 2 retrieval transforms, the period trimmer, the politeness trimmer, the system-prompt editor);
+- One switch per transform (5 command filters, RTK structure compaction, 2 retrieval transforms, the punctuation tidy, the word delete/replace table, the system-prompt editor);
+- A plain-language compression-strength pick (gentle / default / aggressive) that sets the budgets and min-rewrite thresholds in one click, with the raw numbers still available under "advanced";
 - Advanced: budgets, `minChars`/`minGain`, retrieval thresholds, over-budget recovery (`spill`/`rerun`/`none`), `logEvery`, and the plugin master switch;
-- A three-way scope shared by the prose trimmers (punctuation / politeness) (`off` / prose outputs only / all prose);
+- A three-way scope shared by the prose transforms (punctuation / words) (`off` / prose outputs only / all prose);
+- The word table editor: one row per word with an optional replacement (empty = delete), saved as `prose.politenessWords`;
+- Conversation editing: rewrite recent messages; the rewrite only ships in the next request, never the durable log, and can be restored;
+- The transform record: what each recent prose pass removed and added (words, marks);
 - The savings record: this process and all time, tokens and characters removed, the saved share, a per-tool table, and a message/reply strip count;
 - The profile directory the choice is written to, so you can see whether a switch actually persisted.
 
@@ -86,8 +95,9 @@ At the bottom of Settings → 省 Token, the 系统提示词 card lets you enabl
 | `retrieval.readOutlineOverLines` | `400` | Outline a `read` only above this line count, and only when the call had no `offset`/`limit`. |
 | `retrieval.maxOutlineSymbols` | `60` | |
 | `retrieval.maxGrepMatches` | `50` | |
-| `prose.stripTrailingPeriod` | `true` | Remove every trailing `.` / `。` / `,` / `，` from prose lines (an ASCII ellipsis is kept). |
-| `prose.stripPoliteness` | `true` | Drop politeness words (`谢谢`, `请`, `please`, `thanks`, …) from prose lines. |
+| `prose.stripTrailingPeriod` | `true` | Tidy punctuation: drop a mark opening a paragraph; collapse two stuck-together marks to one (a comma and a period keep the period, same-strength keeps the right one); then drop the run of trailing `.` / `。` / `,` / `，` (an ASCII ellipsis is kept). |
+| `prose.stripPoliteness` | `true` | Delete or replace words on prose lines via the `politenessWords` table. |
+| `prose.politenessWords` | built-in politeness list | Each entry is `{ word, replace? }`: empty/omitted `replace` deletes the word, a string replaces it. Unset = the built-in list (谢谢 / 请 / please / thanks, …); an explicit empty list turns the word step off. |
 | `prose.scope` | `filtered` | `filtered` = only output a command filter marked as prose (e.g. `git log`); `all`; `off`. |
 | `recovery` | `spill` | `spill` \| `rerun` \| `none`. |
 | `logEvery` | `0` | Log a savings line every N rewritten results; `0` is quiet. |
@@ -116,6 +126,16 @@ Buckets a session log by event type (`user/message`, `assistant/message`, `tool/
 oh-my-token map <file|dir>      # the outline `read` would produce
 oh-my-token lint [config.json]  # validate a row config without starting DSH
 ```
+
+## Where else it could compress
+
+Walked through "every byte the model could act on" once more:
+
+- **Command output** (the big one): 5 command filters + 17 RTK structural compactors already cover pytest / git / tsc / package managers / eslint / cargo / go test / grep / find / ls / tree. The long tail (docker, kubectl, make…) runs through shape detection + generic cleanup + smart-truncation instead of one more hand-written parser — every parser is a regression-test surface to maintain.
+- **File reads**: large `read` gets a symbol outline, large `grep` gets capped. Going further (AST-only, skip import blocks) would trade "text the model can quote" for "a summary the model has to ask for again", with a real chance of dropping the one line that matters. Not worth it.
+- **JSON / images**: collapsing repeated JSON objects is the next candidate, but for a lockfile one deleted line can send the model after the wrong version — asymmetric risk, deferred. Image bytes are not text; that cost lives in the upstream multimodal encoder, where no plugin-side compression is safe.
+- **Conversation text**: covered by the word table, punctuation tidy and the conversation editor. Anything more aggressive (summarising history) needs another LLM call, which breaks the no-helper-process constraint.
+- **System prompt**: append/resegment only, no auto-trim — every word in a prompt is a constraint the user chose, and the cost of dropping one is unmeasurable.
 
 ## Design constraints
 

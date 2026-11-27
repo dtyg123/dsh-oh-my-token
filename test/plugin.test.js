@@ -89,10 +89,10 @@ test('identity', () => {
   assert.deepEqual(inject, ['tools']);
 });
 
-test('registers its four listeners and three routes', () => {
+test('registers its four listeners and four routes', () => {
   const { listeners, routes, infos } = mount({});
   assert.deepEqual([...listeners.keys()], ['tools/post-execute', 'agent/pre-step', 'system-prompt/assemble', 'llm/stream']);
-  assert.deepEqual([...routes.keys()], ['/dsh-oh-my-token/state', '/dsh-oh-my-token/stats', '/dsh-oh-my-token/prompt']);
+  assert.deepEqual([...routes.keys()], ['/dsh-oh-my-token/state', '/dsh-oh-my-token/stats', '/dsh-oh-my-token/prompt', '/dsh-oh-my-token/edit']);
   assert.equal(infos.length, 1);
 });
 
@@ -419,4 +419,78 @@ test('the master switch off leaves a tool result untouched', async () => {
   const handler = listeners.get('tools/post-execute');
   const decision = await handler(pytest, { isError: false }, async () => accept(text(PYTEST_BODY)));
   assert.equal(decision.content[0].text, PYTEST_BODY);
+});
+
+test('GET /edit lists the recent messages of the last session, with user edits applied', async () => {
+  const { listeners, routes } = mount({});
+  const history = [
+    { id: 'u1', role: 'user', source: { kind: 'user' }, content: [{ type: 'text', text: 'Old question.' }] },
+    { id: 'a1', role: 'assistant', source: { kind: 'model' }, content: [{ type: 'text', text: 'Old answer.' }] },
+  ];
+  const session = { deriveMessages: () => history };
+  const claim = { id: 'u2', role: 'user', source: { kind: 'user' }, content: [{ type: 'text', text: 'New.' }] };
+  await listeners.get('agent/pre-step')(
+    { agent: { session }, messages: [claim] },
+    async () => ({ kind: 'enter', messages: [claim] }),
+  );
+
+  const edit = fakeResponse();
+  await routes.get('/dsh-oh-my-token/edit').handler({ method: 'GET' }, edit);
+  assert.equal(edit.status, 200);
+  const items = edit.json().items;
+  assert.deepEqual(items.map((item) => item.id), ['a1', 'u1'], 'newest first; the new claim is not in the log yet');
+  assert.equal(items[0].role, 'assistant');
+  assert.equal(items[1].edited, false);
+  assert.equal(items[1].text, 'Old question', 'the list shows the derived copy, i.e. what the next request carries');
+
+  // The edit only rewrites the derived copy of that message, not the log.
+  const post = fakeResponse();
+  await routes.get('/dsh-oh-my-token/edit').handler(
+    postReq({ items: [{ id: 'u1', text: 'The rewritten question' }] }),
+    post,
+  );
+  assert.equal(post.status, 200);
+  const derived = session.deriveMessages();
+  assert.equal(derived[0].content[0].text, 'The rewritten question');
+  assert.equal(history[0].content[0].text, 'Old question.', 'the durable record is untouched');
+
+  // Restoring clears the edit.
+  const clear = fakeResponse();
+  await routes.get('/dsh-oh-my-token/edit').handler(
+    postReq({ items: [{ id: 'u1', text: null }] }),
+    clear,
+  );
+  assert.equal(clear.status, 200);
+  assert.equal(clear.json().items.find((item) => item.id === 'u1').edited, false);
+  assert.equal(session.deriveMessages()[0].content[0].text, 'Old question');
+});
+
+test('conversation edits are persisted in the state file', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'oh-my-token-'));
+  const { routes } = mount({}, { profileDir: dir });
+  const response = fakeResponse();
+  await routes.get('/dsh-oh-my-token/edit').handler(
+    postReq({ items: [{ id: 'u9', text: 'edited' }] }),
+    response,
+  );
+  assert.equal(response.status, 200);
+  const written = JSON.parse(readFileSync(join(dir, 'dsh-oh-my-token.state.json'), 'utf8'));
+  assert.deepEqual(written.edits, [{ id: 'u9', text: 'edited' }]);
+});
+
+test('the prose record shows which words and marks were removed', async () => {
+  const { listeners, routes } = mount({ minChars: 10, prose: { scope: 'all' } });
+  const handler = listeners.get('tools/post-execute');
+  const pad = 'x'.repeat(280); // pad over minChars without touching the prose
+  await handler(
+    { name: 'bash', arguments: { command: 'echo hello' }, callId: 'c2' },
+    { isError: false },
+    async () => accept(text(`谢谢，请稍等。${pad}`)),
+  );
+  const response = fakeResponse();
+  await routes.get('/dsh-oh-my-token/state').handler({ method: 'GET' }, response);
+  const recent = response.json().recent;
+  assert.ok(recent.length >= 1, 'a prose note was recorded');
+  assert.match(recent[0].notes.join(' '), /删「谢谢」/);
+  assert.match(recent[0].notes.join(' '), /标点/);
 });

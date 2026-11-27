@@ -8,6 +8,7 @@ import {
   sanitizeConfigPatch, sanitizeModePatch, sanitizeScope, stateDirectory, writeState,
 } from '../lib/modes.js';
 import { resolveConfig } from '../lib/config.js';
+import { DEFAULT_POLITE_WORDS } from '../lib/text.js';
 
 test('the row config seeds every switch', () => {
   const row = resolveConfig({ filters: { git: false }, prose: { stripTrailingPeriod: false } });
@@ -30,7 +31,10 @@ test('effectiveConfig folds switches without disturbing budgets', () => {
   assert.equal(policy.retrieval.grepCap, false);
   assert.equal(policy.retrieval.readOutline, true);
   assert.equal(policy.rtk, true);
-  assert.deepEqual(policy.prose, { stripTrailingPeriod: true, stripPoliteness: true, scope: 'all' });
+  assert.equal(policy.prose.stripTrailingPeriod, true);
+  assert.equal(policy.prose.stripPoliteness, true);
+  assert.equal(policy.prose.scope, 'all');
+  assert.equal(policy.prose.politenessWords, DEFAULT_POLITE_WORDS, 'the default word list rides along');
 });
 
 test('the politeness switch folds independently of punctuation', () => {

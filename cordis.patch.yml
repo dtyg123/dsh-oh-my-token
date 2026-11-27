@@ -41,11 +41,21 @@
           maxGrepMatches: 50
 
         prose:
-          # Drop sentence-final `.` / `。` / `,` / `，` on prose lines only. Code,
-          # diffs, paths, URLs, versions and decimals are never touched.
+          # Tidy punctuation on prose lines: drop a mark opening a paragraph,
+          # collapse two stuck-together marks to one (a comma + period keep
+          # the period), and drop the run of trailing `.` / `。` / `,` / `，`.
+          # Code, diffs, paths, URLs, versions and decimals are never touched.
           # scope: filtered (only prose outputs such as git log) | all | off.
           stripTrailingPeriod: true
-          # Drop politeness words (谢谢 / 请 / please / thanks) on prose lines.
+          # Word delete/replace: each entry is { word, replace? }; empty or
+          # omitted replace deletes the word, a string replaces it. The
+          # built-in politeness list (谢谢 / 请 / please / thanks, …) applies
+          # when this key is absent.
+          # stripPoliteness: true
+          # politenessWords:
+          #   - word: 谢谢
+          #   - word: 请
+          #     replace: 拜托
           stripPoliteness: true
           scope: filtered
 

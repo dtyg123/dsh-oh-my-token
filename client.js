@@ -23,6 +23,45 @@ window.__ModuleLoader__.load({
     const STATE_ENDPOINT = '/dsh-oh-my-token/state';
     const STATS_ENDPOINT = '/dsh-oh-my-token/stats';
     const PROMPT_ENDPOINT = '/dsh-oh-my-token/prompt';
+    const EDIT_ENDPOINT = '/dsh-oh-my-token/edit';
+
+    /**
+     * Plain-language strength presets: one pick sets the budgets and the
+     * min-rewrite thresholds. Choosing one saves it straight away; touching a
+     * raw number below drops into "custom".
+     */
+    const PRESETS = {
+      gentle: {
+        budgets: { default: 9000, read: 18000, grep: 9000, bash: 6000 },
+        minChars: 1200,
+        minGain: 0.1,
+      },
+      default: {
+        budgets: { default: 6000, read: 12000, grep: 6000, bash: 4000 },
+        minChars: 800,
+        minGain: 0.05,
+      },
+      aggressive: {
+        budgets: { default: 3000, read: 6000, grep: 3000, bash: 2000 },
+        minChars: 400,
+        minGain: 0.02,
+      },
+    };
+
+    /** Which preset (if any) the live config matches, else 'custom'. */
+    function presetOf(config) {
+      for (const [name, preset] of Object.entries(PRESETS)) {
+        if (preset.budgets.default === config?.budgets?.default
+          && preset.budgets.read === config?.budgets?.read
+          && preset.budgets.grep === config?.budgets?.grep
+          && preset.budgets.bash === config?.budgets?.bash
+          && preset.minChars === config?.minChars
+          && preset.minGain === config?.minGain) {
+          return name;
+        }
+      }
+      return 'custom';
+    }
 
     const TEXT = {
       nav: '省 Token',
@@ -52,7 +91,7 @@ window.__ModuleLoader__.load({
       switchesHint: '改动立即生效，无需重启。',
       filters: '命令输出过滤',
       retrieval: '检索式读取',
-      prose: '句末标点',
+      prose: '散文整理（标点 / 客套词）',
       proseHint: '只对判定为散文的行生效。代码、diff、路径、URL、版本号一律不动。',
       scopes: {
         off: '关闭',
@@ -102,17 +141,46 @@ window.__ModuleLoader__.load({
         tsc: ['tsc 输出', '只保留 error TS 开头的行与总数，告警丢弃'],
         packageManager: ['包管理器安装', '成功时只留摘要行，失败时只留错误行'],
         generic: ['通用清理', '任意命令都安全：ANSI、回车重绘、重复行、进度条'],
-        rtk: ['RTK 风格压缩', '命令过滤器未命中时，再按结构压缩 git 输出、构建日志、grep/find/ls/tree 等'],
+        rtk: ['RTK 风格压缩', '命令过滤器未命中时，再按结构压缩 git、构建、eslint、cargo/go 测试、grep/find/ls/tree 等'],
         readOutline: ['大文件大纲', '超过行数阈值且没给 offset/limit 的 read 只返回符号大纲'],
         grepCap: ['搜索结果截断', '匹配过多时只留前 N 条并说明剩余数量'],
-        proseStrip: ['删除句末标点', '删除散文行、你的输入与助手回复末尾的句号/逗号；代码、URL、路径、版本号不动'],
-        politenessStrip: ['删除客套词', '删除散文行、你的输入与助手回复里的「谢谢」「请」「please」「thanks」等客套词；代码、URL、路径、版本号不动'],
+        proseStrip: ['标点整理', '段首标点删去；挨着的两个标点只留一个（逗号+句号留句号）；句末连续的 . ， 。 ， 删掉；省略号不动'],
+        politenessStrip: ['客套词删除/替换', '删去或替换「谢谢」「请」「please」「thanks」等；词表可在下方自定义，代码、URL、路径不动'],
         systemPrompt: ['修改系统提示词', '把若干小段分段拼接到系统提示词末尾'],
       },
       file: '配置目录',
       none: '未找到配置目录，改动不会落盘',
       generated: '更新时间',
       note: 'Token 数按 Harness 显示上下文时的同一套估算口径（4 字符 ≈ 1 token）折算；只统计被移除的字符。',
+      preset: '压缩力度',
+      presetHint: '一键设置字符上限与最小改写阈值；想精调再展开下面「高级数字」。',
+      presets: {
+        gentle: '省着压（留更多内容）',
+        default: '默认',
+        aggressive: '狠压（最省 token）',
+        custom: '自定义（手动调过）',
+      },
+      presetApply: '应用',
+      rawSettings: '高级数字（原始配置）',
+      words: '词语删除 / 替换',
+      wordsHint: '每行一条：左边的词在散文行里被删掉；右边非空则替换成右边的内容。只作用于散文行，代码、URL、路径、版本号不动。',
+      wordLabel: '词',
+      replaceLabel: '替换为空 = 删除',
+      addWord: '加一个词',
+      saveWords: '保存词表',
+      editTitle: '对话内容编辑',
+      editHint: '改写最近消息的内容。你的改写只在下次请求发给模型，磁盘上的历史原样不动。',
+      roleUser: '你',
+      roleAssistant: '模型',
+      editNow: '编辑',
+      editSaving: '保存改写',
+      editRestore: '恢复原内容',
+      editCancel: '取消',
+      editEmpty: '还没有可编辑的消息，对话几句后这里会列出最近的内容。',
+      notes: '自动变换记录',
+      notesHint: '程序最近自动删掉 / 加上的词与标点（散文步骤才有记录）。',
+      notesEmpty: '还没有变换记录。',
+      notesAgo: (seconds) => (seconds < 60 ? `${seconds} 秒前` : `${Math.floor(seconds / 60)} 分钟前`),
     };
 
     /** A finite, non-negative number from any wire value. */
@@ -338,6 +406,13 @@ window.__ModuleLoader__.load({
       );
     }
 
+    /** One horizontal input, the size the page uses everywhere. */
+    const inputStyle = {
+      padding: '3px 6px', borderRadius: '5px', border: '1px solid var(--dsw-alias-border-l1)',
+      background: 'transparent', color: 'var(--dsw-alias-label-primary)', font: 'inherit', fontSize: '12px',
+      flex: '1 1 120px', minWidth: 80,
+    };
+
     /** The settings page. */
     function SavingsPage() {
       const text = TEXT;
@@ -347,6 +422,10 @@ window.__ModuleLoader__.load({
       const [confirming, setConfirming] = React.useState(false);
       const [spDraft, setSpDraft] = React.useState(null);
       const [cfgDraft, setCfgDraft] = React.useState(null);
+      const [wordsDraft, setWordsDraft] = React.useState(null);
+      const [editItems, setEditItems] = React.useState(null);
+      const [editDraft, setEditDraft] = React.useState({});
+      const [editBusy, setEditBusy] = React.useState('');
 
       const load = React.useCallback(async () => {
         try {
@@ -373,6 +452,23 @@ window.__ModuleLoader__.load({
       React.useEffect(() => {
         if (cfgDraft === null && state?.config) setCfgDraft(state.config);
       }, [state, cfgDraft]);
+      React.useEffect(() => {
+        const words = state?.config?.prose?.politenessWords;
+        if (wordsDraft === null && Array.isArray(words)) {
+          setWordsDraft(words.map((entry) => ({ word: entry.word, replace: entry.replace ?? '' })));
+        }
+      }, [state, wordsDraft]);
+      /** Load the editable conversation messages. */
+      const loadEdits = React.useCallback(async () => {
+        try {
+          const response = await fetch(EDIT_ENDPOINT, { headers: { accept: 'application/json' } });
+          if (!response.ok) return;
+          setEditItems(response.json ? (await response.json()).items : []);
+        } catch {
+          /* the page still works when the route is absent (older host) */
+        }
+      }, []);
+      React.useEffect(() => { loadEdits(); }, [loadEdits]);
       React.useEffect(() => {
         const timer = setInterval(() => { load(); }, 5000);
         return () => { clearInterval(timer); };
@@ -544,6 +640,67 @@ window.__ModuleLoader__.load({
         }
       };
 
+      /** One preset pick saves the whole strength in one call. */
+      const applyPreset = async (name) => {
+        if (!(name in PRESETS)) return;
+        setBusy('preset');
+        try {
+          const body = await postState({ config: PRESETS[name] });
+          setCfgDraft(body.config);
+        } catch (failure) {
+          setError(`${text.failed}: ${String(failure?.message ?? failure)}`);
+        } finally {
+          setBusy('');
+        }
+      };
+
+      const setWordRow = (index, key, value) => setWordsDraft((rows) =>
+        (rows ?? []).map((entry, i) => (i === index ? { ...entry, [key]: value } : entry)));
+      const addWordRow = () => setWordsDraft((rows) => [...(rows ?? []), { word: '', replace: '' }]);
+      const removeWordRow = (index) => setWordsDraft((rows) => (rows ?? []).filter((_, i) => i !== index));
+
+      /** Persist the word list through the config channel (it is a config field). */
+      const saveWords = async () => {
+        setBusy('words');
+        try {
+          const words = (wordsDraft ?? [])
+            .filter((entry) => entry.word !== '')
+            .map((entry) => (entry.replace !== '' ? { word: entry.word, replace: entry.replace } : { word: entry.word }));
+          const body = await postState({ config: { prose: { politenessWords: words } } });
+          const saved = body?.config?.prose?.politenessWords;
+          if (Array.isArray(saved)) setWordsDraft(saved.map((entry) => ({ word: entry.word, replace: entry.replace ?? '' })));
+        } catch (failure) {
+          setError(`${text.failed}: ${String(failure?.message ?? failure)}`);
+        } finally {
+          setBusy('');
+        }
+      };
+
+      /** Save one conversation edit (or restore it with a null text). */
+      const commitEdit = async (id, value) => {
+        setEditBusy(id);
+        try {
+          const response = await fetch(EDIT_ENDPOINT, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ items: [{ id, text: value }] }),
+          });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const body = await response.json();
+          setEditItems(body.items);
+          setEditDraft((draft) => {
+            const next = { ...draft };
+            delete next[id];
+            return next;
+          });
+          setError('');
+        } catch (failure) {
+          setError(`${text.failed}: ${String(failure?.message ?? failure)}`);
+        } finally {
+          setEditBusy('');
+        }
+      };
+
       const toggleEnabled = async () => {
         setBusy('enabled');
         try {
@@ -633,33 +790,56 @@ window.__ModuleLoader__.load({
             disabled: busy === 'enabled', onToggle: toggleEnabled,
           }),
           h('span', { style: { fontSize: '11px', color: 'var(--dsw-alias-label-secondary)' } }, text.enabledHint)),
-        h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '6px', marginTop: '8px' } },
-          CFG_FIELDS.map(([path, step]) => h('label', {
-            key: path,
-            style: { display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '11px', color: 'var(--dsw-alias-label-secondary)' },
-          },
-          text.fields[path] ?? path,
-          h('input', {
-            type: 'number', value: cfgGet(path) ?? '', step, min: 0, disabled: busy === 'config',
-            onChange: (event) => cfgSet(path, event.target.value === '' ? '' : Number(event.target.value)),
+        h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' } },
+          h('span', { style: { fontSize: '11px', color: 'var(--dsw-alias-label-secondary)' } }, text.preset),
+          h('select', {
+            value: presetOf(cfgDraft ?? state?.config),
+            disabled: busy === 'preset',
+            onChange: (event) => {
+              if (event.target.value !== 'custom') applyPreset(event.target.value);
+            },
             style: {
               padding: '3px 6px', borderRadius: '5px', border: '1px solid var(--dsw-alias-border-l1)',
               background: 'transparent', color: 'var(--dsw-alias-label-primary)', font: 'inherit', fontSize: '12px',
             },
-          })))),
-        h('label', { style: { display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '11px', color: 'var(--dsw-alias-label-secondary)', marginTop: '8px' } },
-          text.recovery,
-          h('select', {
-            value: cfgGet('recovery') ?? 'spill', disabled: busy === 'config',
-            onChange: (event) => cfgSet('recovery', event.target.value),
-            style: {
-              padding: '3px 6px', borderRadius: '5px', border: '1px solid var(--dsw-alias-border-l1)',
-              background: 'transparent', color: 'var(--dsw-alias-label-primary)', font: 'inherit', fontSize: '12px', maxWidth: '260px',
+          }, ['gentle', 'default', 'aggressive', 'custom'].map((name) => h('option', {
+            key: name,
+            value: name,
+          }, text.presets[name] ?? name))),
+          h('span', { style: { fontSize: '10px', color: 'var(--dsw-alias-label-secondary)' } }, text.presetHint)),
+        h('details', { style: { marginTop: '8px' } },
+          h('summary', {
+            style: { fontSize: '11px', color: 'var(--dsw-alias-label-secondary)', cursor: 'pointer' },
+          }, text.rawSettings),
+          h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '6px', marginTop: '8px' } },
+            CFG_FIELDS.map(([path, step]) => h('label', {
+              key: path,
+              style: { display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '11px', color: 'var(--dsw-alias-label-secondary)' },
             },
-          }, Object.entries(text.recoveryOptions).map(([value, label]) => h('option', { key: value, value }, label)))),
-        h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px', flexWrap: 'wrap' } },
-          button(text.saveConfig, saveConfig, busy === 'config' || cfgDraft === null),
-          h('span', { style: { fontSize: '11px', color: 'var(--dsw-alias-label-secondary)' } }, text.recoveryHint)),
+            text.fields[path] ?? path,
+            h('input', {
+              type: 'number', value: cfgGet(path) ?? '', step, min: 0, disabled: busy === 'config',
+              onChange: (event) => cfgSet(path, event.target.value === '' ? '' : Number(event.target.value)),
+              style: {
+                padding: '3px 6px', borderRadius: '5px', border: '1px solid var(--dsw-alias-border-l1)',
+                background: 'transparent', color: 'var(--dsw-alias-label-primary)', font: 'inherit', fontSize: '12px',
+              },
+            }))),
+          h('label', { style: { display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '11px', color: 'var(--dsw-alias-label-secondary)', marginTop: '8px' } },
+            text.recovery,
+            h('select', {
+              value: cfgGet('recovery') ?? 'spill', disabled: busy === 'config',
+              onChange: (event) => cfgSet('recovery', event.target.value),
+              style: {
+                padding: '3px 6px', borderRadius: '5px', border: '1px solid var(--dsw-alias-border-l1)',
+                background: 'transparent', color: 'var(--dsw-alias-label-primary)', font: 'inherit', fontSize: '12px', maxWidth: '260px',
+              },
+            }, Object.entries(text.recoveryOptions).map(([value, label]) => h('option', { key: value, value }, label)))),
+          h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' } },
+            button(text.saveConfig, saveConfig, busy === 'config' || cfgDraft === null),
+            h('span', { style: { fontSize: '11px', color: 'var(--dsw-alias-label-secondary)' } }, text.recoveryHint)),
+        ),
+      ),
       ),
       group(text.filters, ['pytest', 'git', 'tsc', 'packageManager', 'generic', 'rtk']),
       group(text.retrieval, ['readOutline', 'grepCap']),
@@ -701,12 +881,131 @@ window.__ModuleLoader__.load({
             }, text.scopes[scope] ?? scope);
           }),
         ),
+        modeOf('politenessStrip') ? h('div', { style: { marginTop: '8px' } },
+          h('div', { style: { display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px' } },
+            h('span', { style: { fontSize: '12px', fontWeight: 600 } }, text.words),
+            h('span', { style: { fontSize: '10px', color: 'var(--dsw-alias-label-secondary)' } }, text.wordsHint)),
+          (wordsDraft ?? []).length === 0
+            ? h('div', { style: { fontSize: '11px', color: 'var(--dsw-alias-label-secondary)', margin: '6px 0' } }, text.emptySegments)
+            : h('div', { style: { display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '6px' } },
+              (wordsDraft ?? []).map((entry, index) => h('div', {
+                key: index,
+                style: { display: 'flex', gap: '6px', alignItems: 'center' },
+              },
+                h('input', {
+                  value: entry.word,
+                  placeholder: text.wordLabel,
+                  maxLength: 40,
+                  disabled: busy === 'words',
+                  onChange: (event) => setWordRow(index, 'word', event.target.value),
+                  style: inputStyle,
+                }),
+                h('input', {
+                  value: entry.replace,
+                  placeholder: text.replaceLabel,
+                  maxLength: 60,
+                  disabled: busy === 'words',
+                  onChange: (event) => setWordRow(index, 'replace', event.target.value),
+                  style: inputStyle,
+                }),
+                h('button', {
+                  type: 'button',
+                  onClick: () => removeWordRow(index),
+                  disabled: busy === 'words',
+                  style: {
+                    padding: '2px 6px', borderRadius: '5px', fontSize: '11px',
+                    border: '1px solid var(--dsw-alias-border-l1)',
+                    background: 'var(--dsw-alias-bg-layer-1)',
+                    color: 'var(--dsw-alias-state-error-primary)',
+                    cursor: 'pointer',
+                  },
+                }, '×'),
+              ))),
+          h('div', { style: { display: 'flex', gap: '8px', marginTop: '6px', flexWrap: 'wrap' } },
+            button(text.addWord, addWordRow, busy === 'words'),
+            button(text.saveWords, saveWords, busy === 'words' || (wordsDraft ?? []).every((entry) => entry.word === '' && entry.replace === '')),
+          ),
+        ) : null,
         h('div', {
           style: {
             marginTop: '6px', fontSize: '11px', lineHeight: '16px',
             color: 'var(--dsw-alias-label-secondary)',
           },
         }, text.proseHint),
+      ),
+      h(Card, null,
+        h('div', { style: { display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px', marginBottom: '6px' } },
+          h('span', { style: { fontSize: '12px', fontWeight: 600 } }, text.editTitle),
+          h('span', { style: { fontSize: '10px', color: 'var(--dsw-alias-label-secondary)' } }, text.editHint)),
+        editItems === null || editItems.length === 0
+          ? h('div', { style: { fontSize: '11px', lineHeight: '16px', color: 'var(--dsw-alias-label-secondary)' } }, text.editEmpty)
+          : h('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px' } },
+            editItems.map((item) => {
+              const drafting = editDraft[item.id] !== undefined;
+              return h('div', {
+                key: item.id,
+                style: {
+                  padding: '7px 9px', borderRadius: '8px',
+                  border: item.edited ? '1px solid var(--dsw-alias-brand-primary)' : '1px solid var(--dsw-alias-border-l1)',
+                  background: 'var(--dsw-alias-bg-layer-1)',
+                },
+              },
+                h('div', { style: { display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' } },
+                  h('span', {
+                    style: {
+                      fontSize: '10px', padding: '1px 6px', borderRadius: '999px',
+                      border: '1px solid var(--dsw-alias-border-l1)',
+                      color: item.role === 'user' ? 'var(--dsw-alias-label-primary)' : 'var(--dsw-alias-label-secondary)',
+                    },
+                  }, item.role === 'user' ? text.roleUser : text.roleAssistant),
+                  item.edited ? h('span', { style: { fontSize: '10px', color: 'var(--dsw-alias-state-success-primary)' } }, '· edited') : null,
+                  h('div', { style: { flex: '1 1 auto', minWidth: 0 } }),
+                  !drafting ? button(text.editNow, () => setEditDraft((draft) => ({ ...draft, [item.id]: item.text })), false) : null,
+                ),
+                drafting
+                  ? h('textarea', {
+                    value: editDraft[item.id],
+                    maxLength: 20000,
+                    rows: 3,
+                    onChange: (event) => setEditDraft((draft) => ({ ...draft, [item.id]: event.target.value })),
+                    style: {
+                      ...inputStyle, width: '100%', resize: 'vertical', flex: '1 1 auto',
+                    },
+                  })
+                  : h('div', {
+                    style: {
+                      fontSize: '11px', lineHeight: '16px', color: 'var(--dsw-alias-label-secondary)',
+                      whiteSpace: 'pre-wrap', overflowWrap: 'anywhere',
+                    },
+                  }, item.text),
+                h('div', { style: { display: 'flex', gap: '6px', marginTop: '6px' } },
+                  drafting
+                    ? button(text.editSaving, () => { commitEdit(item.id, editDraft[item.id].trim() === '' ? null : editDraft[item.id]); }, editBusy === item.id)
+                    : null,
+                  drafting
+                    ? button(text.editCancel, () => setEditDraft((draft) => { const next = { ...draft }; delete next[item.id]; return next; }), editBusy === item.id)
+                    : null,
+                  item.edited && !drafting
+                    ? button(text.editRestore, () => commitEdit(item.id, null), editBusy === item.id)
+                    : null),
+              );
+            }),
+          ),
+      ),
+      h(Card, null,
+        h('div', { style: { display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px', marginBottom: '6px' } },
+          h('span', { style: { fontSize: '12px', fontWeight: 600 } }, text.notes),
+          h('span', { style: { fontSize: '10px', color: 'var(--dsw-alias-label-secondary)' } }, text.notesHint)),
+        (Array.isArray(state?.recent) && state.recent.length > 0)
+          ? h('div', { style: { display: 'flex', flexDirection: 'column', gap: '3px' } },
+            state.recent.slice(0, 15).map((entry, index) => h('div', {
+              key: index,
+              style: { fontSize: '11px', lineHeight: '16px', color: 'var(--dsw-alias-label-secondary)' },
+            },
+            h('span', { style: { color: 'var(--dsw-alias-label-primary)' } }, entry.label),
+            `  ${entry.notes.join('、')}  ·  ${text.notesAgo(Math.max(0, (Date.now() - entry.at) / 1000))}`)),
+          )
+          : h('div', { style: { fontSize: '11px', color: 'var(--dsw-alias-label-secondary)' } }, text.notesEmpty),
       ),
       h(Card, null,
         h('div', { style: { fontSize: '12px', fontWeight: 600, marginBottom: '6px' } }, text.systemPrompt),

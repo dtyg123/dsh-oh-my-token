@@ -11,6 +11,7 @@ import {
   stripProgressLines,
   stripTrailingPeriods,
   tailLines,
+  tidyPunctuation,
   truncateMiddle,
 } from '../lib/text.js';
 
@@ -72,6 +73,51 @@ test('politeness and punctuation trim independently', () => {
   assert.equal(stripTrailingPeriods('谢谢，请稍等。', { politeness: false }), '谢谢，请稍等');
   assert.equal(stripTrailingPeriods('谢谢，请稍等。', { punctuation: false }), '稍等。');
   assert.equal(stripTrailingPeriods('谢谢，请稍等。', { politeness: false, punctuation: false }), '谢谢，请稍等。');
+});
+
+test('a custom word list replaces instead of deleting', () => {
+  const words = [{ word: '请', replace: '拜托' }, { word: '谢谢', replace: '' }];
+  assert.equal(
+    stripTrailingPeriods('谢谢，请帮我更新。', { words }),
+    '拜托帮我更新',
+  );
+});
+
+test('word matching keeps compounds and code safe', () => {
+  const words = [{ word: '请', replace: '' }];
+  assert.equal(stripTrailingPeriods('请求已发送。', { words }), '请求已发送');
+  assert.equal(
+    stripTrailingPeriods("const msg = '谢谢'", { words: [{ word: '谢谢', replace: 'bye' }] }),
+    "const msg = '谢谢'",
+    'a quoted word inside a code line is not prose',
+  );
+});
+
+test('ASCII words match whole words only', () => {
+  const words = [{ word: 'please', replace: '' }];
+  assert.equal(stripTrailingPeriods('Please wait.', { words }), 'wait');
+  assert.equal(stripTrailingPeriods('pleaseable traits.', { words }), 'pleaseable traits');
+});
+
+test('consecutive punctuation collapses, the sentence-final mark wins', () => {
+  assert.equal(stripTrailingPeriods('text。，text'), 'text。text', 'comma + period keeps the period');
+  assert.equal(stripTrailingPeriods('text。！text'), 'text！text');
+  assert.equal(stripTrailingPeriods('text！，text'), 'text！text');
+  assert.equal(stripTrailingPeriods('text，，text'), 'text，text');
+});
+
+test('a paragraph-opening punctuation is dropped', () => {
+  assert.equal(stripTrailingPeriods('。下一段结束。'), '下一段结束');
+});
+
+test('an ASCII ellipsis is never collapsed or stripped', () => {
+  assert.equal(stripTrailingPeriods('...继续说。'), '...继续说');
+  assert.equal(tidyPunctuation('wait... then go.'), 'wait... then go');
+  assert.equal(tidyPunctuation('wait…… then go.'), 'wait… then go');
+});
+
+test('the word step is a byte-identical no-op when nothing matches', () => {
+  assert.equal(stripTrailingPeriods('nothing to see here', { words: [{ word: 'please' }] }), 'nothing to see here');
 });
 
 test('stripAnsi and carriage-return repaints', () => {

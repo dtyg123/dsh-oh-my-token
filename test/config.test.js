@@ -35,3 +35,20 @@ test('RTK compaction is on by default and can be switched off', () => {
   assert.equal(resolveConfig({ rtk: false }).rtk, false);
   assert.throws(() => resolveConfig({ rtk: 'yes' }), /rtk must be true or false/);
 });
+
+test('the default prose word list is the built-in politeness set', () => {
+  assert.deepEqual(resolveConfig({}).prose.politenessWords.map((entry) => entry.word),
+    ['谢谢', '多谢', '感谢', '请问', '麻烦您', '麻烦', '劳驾', '拜托', '辛苦', '请', 'please', 'thanks', 'thank you', 'kindly']);
+});
+
+test('a custom politeness word list is validated', () => {
+  const words = [{ word: '谢谢', replace: '' }, { word: 'please', replace: 'please ' }];
+  const resolved = resolveConfig({ prose: { politenessWords: words } });
+  assert.deepEqual(resolved.prose.politenessWords, words);
+  assert.throws(() => resolveConfig({ prose: { politenessWords: 'no' } }), /must be an array/);
+  assert.throws(() => resolveConfig({ prose: { politenessWords: [{ word: '' }] } }), /word must be a 1-40 character string/);
+  assert.throws(() => resolveConfig({ prose: { politenessWords: [{ word: 'a', replace: 3 }] } }), /replace must be a string/);
+  assert.throws(() => resolveConfig({ prose: { politenessWords: [{ word: 'a', bogus: 1 }] } }), /only set "word" and "replace"/);
+  // An empty list is valid: it turns the word step off.
+  assert.deepEqual(resolveConfig({ prose: { politenessWords: [] } }).prose.politenessWords, []);
+});
