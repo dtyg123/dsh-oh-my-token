@@ -119,6 +119,7 @@ window.__ModuleLoader__.load({
       id: DIFF_RULE_ID,
       order: 50,
       match(text, from) {
+        if (!liveTextsNow.has(text) && !liveTextsNow.has(text.trim())) return undefined;
         const removals = removalsOf(String(text));
         if (removals === null) return undefined;
         for (const removal of removals) {
@@ -151,7 +152,11 @@ window.__ModuleLoader__.load({
 
     /** The body's text and each text node's offset in it. */
     function bodyText(root) {
-      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+        acceptNode: (node) => (node.parentElement?.closest(`[${MARK_ATTR}]`) !== null
+          ? NodeFilter.FILTER_REJECT
+          : NodeFilter.FILTER_ACCEPT),
+      });
       const nodes = [];
       let text = '';
       for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
@@ -195,42 +200,260 @@ window.__ModuleLoader__.load({
       return fragment;
     }
 
-    /**
-     * Decorate every rendered reply body that has a record. Bodies already
-     * decorated keep their marks; a re-render drops the attribute with the DOM.
-     */
-    function decorateBodies() {
-      if (diffByText.size === 0 || typeof document === 'undefined') return;
-      for (const root of document.querySelectorAll('[data-text-interaction-source]:not([data-message-bubble])')) {
-        if (root.hasAttribute(MARKED_ATTR)) continue;
-        const { text, nodes } = bodyText(root);
-        if (text === '' || nodes.length === 0) continue;
-        const removals = removalsOf(text);
-        if (removals === null) continue;
-        const groups = new Map();
-        for (const removal of removals) {
-          let hit = null;
-          for (const entry of nodes) {
-            if (entry.start > removal.start) break;
-            hit = entry;
-          }
-          if (hit === null) continue;
-          const local = removal.start - hit.start;
-          const value = hit.node.nodeValue ?? '';
-          if (local < 0 || local >= value.length) continue;
-          if (!groups.has(hit.node)) groups.set(hit.node, []);
-          groups.get(hit.node).push({ ...removal, local });
-        }
-        let changed = false;
-        for (const [node, list] of groups) {
-          const parent = node.parentNode;
-          if (parent === null) continue;
-          list.sort((left, right) => left.local - right.local);
-          parent.replaceChild(markedFragment(node.nodeValue ?? '', list), node);
-          changed = true;
-        }
-        if (changed) root.setAttribute(MARKED_ATTR, '1');
+    /** The text the live turn shows; the rule marks nothing outside it. */
+    let liveTextsNow = new Set();
+    /** A signature of that set, so a turn change re-registers the rule once. */
+    let liveSignature = '';
+
+    /** The flow items of the newest turn — the part that is still live. */
+    function liveItems() {
+      const items = [...document.querySelectorAll('[data-chat-flow-key]')];
+      let best = -1;
+      for (const item of items) {
+        const turn = Number(item.getAttribute('data-chat-turn'));
+        if (Number.isFinite(turn) && turn > best) best = turn;
       }
+      if (best < 0) return [];
+      return items.filter((item) => Number(item.getAttribute('data-chat-turn')) === best);
+    }
+
+    /** The message text a live turn shows, without our own marks. */
+    function liveTexts(items) {
+      const texts = new Set();
+      for (const item of items) {
+        for (const body of item.querySelectorAll('[data-text-interaction-source]')) {
+          const { text } = bodyText(body);
+          if (text === '') continue;
+          texts.add(text);
+          texts.add(text.trim());
+        }
+      }
+      return texts;
+    }
+
+    /**
+     * Decorate the live turn only: a turn that has moved on is already
+     * compressed, so it keeps neither marks nor an edit control and stops
+     * paying for them.
+     */
+    function decorateChat() {
+      if (typeof document === 'undefined') return false;
+      const items = liveItems();
+      const live = new Set(items);
+      const texts = liveTexts(items);
+      const signature = [...texts].sort().join('\u0000');
+      const scopeChanged = signature !== liveSignature;
+      liveSignature = signature;
+      liveTextsNow = texts;
+      setLiveTurn(items.reduce((max, item) => Math.max(max, Number(item.getAttribute('data-chat-turn')) || 0), -1));
+
+      // Drop our marks outside the live turn — once per turn change, not on
+      // every pass, so the observer is not fed by its own cleanup.
+      if (scopeChanged) {
+        for (const mark of document.querySelectorAll(`[${MARK_ATTR}]`)) {
+          const item = mark.closest('[data-chat-flow-key]');
+          if (item === null || !live.has(item)) mark.remove();
+        }
+        for (const root of document.querySelectorAll(`[${MARKED_ATTR}]`)) {
+          const item = root.closest('[data-chat-flow-key]');
+          if (item === null || !live.has(item)) root.removeAttribute(MARKED_ATTR);
+        }
+      }
+
+      if (diffByText.size > 0) {
+        for (const item of items) {
+          for (const root of item.querySelectorAll('[data-text-interaction-source]:not([data-message-bubble])')) {
+            if (root.hasAttribute(MARKED_ATTR)) continue;
+            const { text, nodes } = bodyText(root);
+            if (text === '' || nodes.length === 0) continue;
+            const removals = removalsOf(text);
+            if (removals === null) continue;
+            const groups = new Map();
+            for (const removal of removals) {
+              let hit = null;
+              for (const entry of nodes) {
+                if (entry.start > removal.start) break;
+                hit = entry;
+              }
+              if (hit === null) continue;
+              const local = removal.start - hit.start;
+              const value = hit.node.nodeValue ?? '';
+              if (local < 0 || local >= value.length) continue;
+              if (!groups.has(hit.node)) groups.set(hit.node, []);
+              groups.get(hit.node).push({ ...removal, local });
+            }
+            let changed = false;
+            for (const [node, list] of groups) {
+              const parent = node.parentNode;
+              if (parent === null) continue;
+              list.sort((left, right) => left.local - right.local);
+              parent.replaceChild(markedFragment(node.nodeValue ?? '', list), node);
+              changed = true;
+            }
+            if (changed) root.setAttribute(MARKED_ATTR, '1');
+          }
+        }
+      }
+
+      return scopeChanged;
+    }
+
+    /** The newest turn number, published so a message control can hide itself. */
+    const liveTurnListeners = new Set();
+    let liveTurnNow = -1;
+    function setLiveTurn(turn) {
+      if (turn === liveTurnNow) return;
+      liveTurnNow = turn;
+      for (const listener of liveTurnListeners) listener();
+    }
+    const liveTurnStore = {
+      subscribe: (listener) => {
+        liveTurnListeners.add(listener);
+        return () => liveTurnListeners.delete(listener);
+      },
+      getSnapshot: () => liveTurnNow,
+    };
+
+    /** One 改写 control plus its editor, rendered by the harness itself. */
+    function EditControl(props) {
+      const liveTurn = React.useSyncExternalStore(liveTurnStore.subscribe, liveTurnStore.getSnapshot);
+      const [turn, setTurn] = React.useState(null);
+      const [open, setOpen] = React.useState(false);
+      const [draft, setDraft] = React.useState('');
+      const [status, setStatus] = React.useState('');
+      const [id, setId] = React.useState(null);
+      const anchor = React.useRef(null);
+
+      React.useLayoutEffect(() => {
+        const item = anchor.current?.closest('[data-chat-flow-key]') ?? null;
+        const next = item === null ? null : Number(item.getAttribute('data-chat-turn'));
+        if (!Object.is(turn, next)) setTurn(next);
+      });
+
+      const readShown = () => {
+        const item = anchor.current?.closest('[data-chat-flow-key]') ?? null;
+        const body = item?.querySelector('[data-message-bubble], [data-text-interaction-source]');
+        return body?.textContent ?? '';
+      };
+
+      const openEditor = async () => {
+        setStatus('读取中…');
+        try {
+          const list = await fetch(EDIT_ENDPOINT, { headers: { accept: 'application/json' } })
+            .then((response) => (response.ok ? response.json() : null));
+          const items = Array.isArray(list?.items) ? list.items : [];
+          const shown = readShown();
+          const target = typeof props.messageId === 'string'
+            ? items.find((entry) => entry.id === props.messageId)
+            : items.find((entry) => entry.text === shown || entry.text.trim() === shown.trim());
+          if (target === undefined) {
+            setStatus('这条消息不在可改写范围内');
+            return;
+          }
+          setId(target.id);
+          setDraft(target.text);
+          setStatus('');
+          setOpen(true);
+        } catch (failure) {
+          setStatus(`读取失败：${String(failure?.message ?? failure)}`);
+        }
+      };
+
+      const save = async () => {
+        if (id === null) return;
+        setStatus('保存中…');
+        try {
+          const response = await fetch(EDIT_ENDPOINT, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ items: [{ id, text: draft }] }),
+          });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          setOpen(false);
+          setStatus('已改写 · 只在下一次请求生效');
+        } catch (failure) {
+          setStatus(`保存失败：${String(failure?.message ?? failure)}`);
+        }
+      };
+
+      React.useEffect(() => {
+        if (status === '') return undefined;
+        const timer = setTimeout(() => setStatus(''), 4000);
+        return () => clearTimeout(timer);
+      }, [status]);
+
+      // A turn that has moved on is compressed; rewriting it would change
+      // nothing the next request carries, so the control stays hidden. It is
+      // hidden with CSS, never unmounted: the anchor must survive so the turn
+      // number stays readable (unmounting it loops the renderer).
+      const hidden = turn !== null && Number.isFinite(turn) && liveTurn !== -1 && turn !== liveTurn;
+
+      return h('span', {
+        ref: anchor,
+        style: { display: hidden ? 'none' : 'inline-flex', alignItems: 'center', gap: '6px', marginLeft: '6px' },
+      },
+        h('button', {
+          type: 'button',
+          onClick: openEditor,
+          title: '改写这条消息：只影响下一次请求，不动历史',
+          style: {
+            font: 'inherit', fontSize: '11px', lineHeight: '16px', padding: '1px 7px',
+            borderRadius: '5px', cursor: 'pointer',
+            border: '1px solid var(--dsw-alias-border-l1)', background: 'transparent',
+            color: 'var(--dsw-alias-label-secondary)',
+          },
+        }, '改写'),
+        status === '' ? null : h('span', { style: { fontSize: '10px', color: 'var(--dsw-alias-label-secondary)' } }, status),
+        open ? h('div', {
+          style: {
+            position: 'fixed', inset: '0', zIndex: 60, display: 'grid', placeItems: 'center',
+            background: 'rgba(0, 0, 0, 0.35)',
+          },
+          onClick: (event) => { if (event.target === event.currentTarget) setOpen(false); },
+        }, h('div', {
+          style: {
+            width: 'min(560px, 90vw)', padding: '14px 16px', borderRadius: '12px',
+            border: '1px solid var(--dsw-alias-border-l1)',
+            background: 'var(--dsw-alias-bg-layer-2)', boxShadow: '0 12px 32px rgba(0,0,0,.35)',
+            display: 'flex', flexDirection: 'column', gap: '10px',
+          },
+        },
+        h('div', { style: { fontSize: '12px', fontWeight: 600 } }, '改写这条消息'),
+        h('div', { style: { fontSize: '11px', color: 'var(--dsw-alias-label-secondary)' } },
+          '只写进下一次请求；磁盘上的历史不动，点取消即放弃。'),
+        h('textarea', {
+          value: draft,
+          rows: 8,
+          onChange: (event) => setDraft(event.target.value),
+          style: {
+            width: '100%', boxSizing: 'border-box', font: 'inherit', fontSize: '12px',
+            lineHeight: '18px', padding: '8px 10px', borderRadius: '8px', resize: 'vertical',
+            border: '1px solid var(--dsw-alias-border-l1)',
+            background: 'var(--dsw-alias-bg-layer-1)', color: 'var(--dsw-alias-label-primary)',
+          },
+        }),
+        status === '' ? null : h('div', { style: { fontSize: '11px', color: 'var(--dsw-alias-label-secondary)' } }, status),
+        h('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: '8px' } },
+          h('button', {
+            type: 'button',
+            onClick: () => setOpen(false),
+            style: {
+              font: 'inherit', fontSize: '11px', padding: '4px 10px', borderRadius: '6px',
+              border: '1px solid var(--dsw-alias-border-l1)', background: 'transparent',
+              color: 'var(--dsw-alias-label-primary)', cursor: 'pointer',
+            },
+          }, '取消'),
+          h('button', {
+            type: 'button',
+            onClick: save,
+            style: {
+              font: 'inherit', fontSize: '11px', padding: '4px 10px', borderRadius: '6px',
+              border: '1px solid var(--dsw-alias-brand-primary)',
+              background: 'var(--dsw-alias-brand-primary)', color: 'var(--dsw-alias-bg-base)',
+              cursor: 'pointer',
+            },
+          }, '保存改写')),
+        )) : null);
     }
 
     const RED_MARK = {
@@ -1411,11 +1634,16 @@ window.__ModuleLoader__.load({
           let applying = false;
           decorateNow = () => {
             applying = true;
+            let scopeChanged = false;
             try {
-              decorateBodies();
+              scopeChanged = decorateChat();
             } finally {
               applying = false;
             }
+            // A new turn retires the old one's marks: re-register so already
+            // rendered bubbles evaluate again without them.
+            if (scopeChanged) armRule();
+            return scopeChanged;
           };
           const schedule = () => {
             if (applying || scheduled !== 0) return;
@@ -1471,6 +1699,26 @@ window.__ModuleLoader__.load({
           key: DIFF_RULE_ID,
           priority: 50,
         }, ProseDiffNode));
+
+        // 改写 lives in the harness's own message slots, so its reconciler owns
+        // the DOM. A slot option this harness rejects must never take the
+        // plugin (and the rest of the UI) down with it.
+        const tryRegister = (name, options) => {
+          ctx.slots.inject(name, () => {
+            try {
+              return ctx.slots.register({ ...options, name }, EditControl);
+            } catch (error) {
+              console.warn('oh-my-token: slot', name, String(error?.message ?? error));
+              return () => {};
+            }
+          });
+        };
+        // `conversation.chat.user.before` is a chain slot: it elects one entry
+        // through a pure selector, and only for a real user row.
+        tryRegister('conversation.chat.user.before', {
+          select: (owner) => (owner?.kind === 'user' ? { edit: true } : null),
+        });
+        tryRegister('conversation.chat.assistant-actions', { id: DIFF_RULE_ID });
       },
     };
   },
