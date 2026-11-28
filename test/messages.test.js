@@ -178,6 +178,21 @@ test('edits never touch tool results or other roles', () => {
   assert.equal(stripHistoryMessages([tool], undefined, { rtk: false, edits })[0], tool);
 });
 
+test('an edit keyed by text needs no message id, so it works after a restart', () => {
+  const user = userMessage('Rewrite this sentence.');
+  const editsByText = new Map([['Rewrite this sentence.', 'Rewritten, no session needed']]);
+  const out = stripHistoryMessages([user], undefined, { rtk: false, prose: false, editsByText });
+  assert.equal(out[0].content[0].text, 'Rewritten, no session needed');
+  assert.equal(user.content[0].text, 'Rewrite this sentence.', 'the source message is untouched');
+});
+
+test('a text edit leaves messages it does not match by identity', () => {
+  const user = userMessage('Another question.');
+  const editsByText = new Map([['Rewrite this sentence.', 'x']]);
+  const out = stripHistoryMessages([user], undefined, { rtk: false, editsByText });
+  assert.equal(out[0].content[0].text, 'Another question', 'only the prose step touched it');
+});
+
 test('a custom word list replaces words in chat text', () => {
   const msg = userMessage('谢谢，请稍等。');
   const words = [{ word: '请', replace: '拜托' }, { word: '谢谢', replace: '' }];

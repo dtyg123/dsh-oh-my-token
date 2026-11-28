@@ -321,7 +321,7 @@ window.__ModuleLoader__.load({
       const [open, setOpen] = React.useState(false);
       const [draft, setDraft] = React.useState('');
       const [status, setStatus] = React.useState('');
-      const [id, setId] = React.useState(null);
+      const [text, setText] = React.useState('');
       const anchor = React.useRef(null);
 
       React.useLayoutEffect(() => {
@@ -330,43 +330,35 @@ window.__ModuleLoader__.load({
         if (!Object.is(turn, next)) setTurn(next);
       });
 
+      /** The message text as the chat shows it, which is what the host holds. */
       const readShown = () => {
         const item = anchor.current?.closest('[data-chat-flow-key]') ?? null;
         const body = item?.querySelector('[data-message-bubble], [data-text-interaction-source]');
-        return body?.textContent ?? '';
+        return body === null || body === undefined ? '' : bodyText(body).text;
       };
 
-      const openEditor = async () => {
-        setStatus('读取中…');
-        try {
-          const list = await fetch(EDIT_ENDPOINT, { headers: { accept: 'application/json' } })
-            .then((response) => (response.ok ? response.json() : null));
-          const items = Array.isArray(list?.items) ? list.items : [];
-          const shown = readShown();
-          const target = typeof props.messageId === 'string'
-            ? items.find((entry) => entry.id === props.messageId)
-            : items.find((entry) => entry.text === shown || entry.text.trim() === shown.trim());
-          if (target === undefined) {
-            setStatus('这条消息不在可改写范围内');
-            return;
-          }
-          setId(target.id);
-          setDraft(target.text);
-          setStatus('');
-          setOpen(true);
-        } catch (failure) {
-          setStatus(`读取失败：${String(failure?.message ?? failure)}`);
+      // No look-up and no message id: the edit names the text it replaces, so it
+      // works on the first try after a restart too.
+      const openEditor = () => {
+        const shown = readShown();
+        if (shown.trim() === '') {
+          setStatus('没读到这条消息的文本');
+          return;
         }
+        setText(shown);
+        setDraft(shown);
+        setStatus('');
+        setOpen(true);
       };
 
       const save = async () => {
-        if (id === null) return;
+        if (text === '') return;
         setStatus('保存中…');
         try {
           const response = await fetch(EDIT_ENDPOINT, {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ items: [{ id, text: draft }] }),
+            body: JSON.stringify({ items: [{ from: text, text: draft }] }),
           });
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
           setOpen(false);

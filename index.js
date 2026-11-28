@@ -103,7 +103,10 @@ export function apply(ctx, config) {
   // User-rewritten conversation text: message id -> replacement. The Map is
   // mutated in place so listeners that captured it (the deriveMessages patch)
   // always see the current edits. Applied to the derived copy only.
-  const editsMap = new Map(state.edits.map((item) => [item.id, item.text]));
+  const editsMap = new Map(state.edits.filter((item) => typeof item.id === 'string').map((item) => [item.id, item.text]));
+  // Chat-made edits name the text they replace, so they apply even when the host
+  // has not seen this session yet (a restart before the first request).
+  const editsByText = new Map(state.edits.filter((item) => typeof item.from === 'string').map((item) => [item.from, item.text]));
 
   /** What the prose step removed/added, newest last; the page shows the tail. */
   const recordProseNote = (label, before, after) => {
@@ -240,6 +243,7 @@ export function apply(ctx, config) {
     rtk: state.modes.rtk !== false,
     words: policy.prose?.politenessWords,
     edits: editsMap,
+    editsByText,
   });
 
   /**
@@ -304,12 +308,13 @@ export function apply(ctx, config) {
     const wantPoliteness = state.modes.politenessStrip !== false;
     // Edits apply even with every prose switch off: they are the user's own
     // words, not a transform.
-    if (!wantPunctuation && !wantPoliteness && editsMap.size === 0) return decision;
+    if (!wantPunctuation && !wantPoliteness && editsMap.size === 0 && editsByText.size === 0) return decision;
     const messages = stripClaimedMessages(decision.messages, payload?.messages, countStrip, {
       punctuation: wantPunctuation,
       politeness: wantPoliteness,
       words: policy.prose?.politenessWords,
       edits: editsMap.size > 0 ? editsMap : undefined,
+      editsByText: editsByText.size > 0 ? editsByText : undefined,
       onProse: (before, after) => recordProseNote('user message', before, after),
     });
     return messages === decision.messages ? decision : { ...decision, messages };
@@ -467,21 +472,29 @@ export function apply(ctx, config) {
           const updates = Array.isArray(body?.items) ? body.items : [];
           const next = state.edits.slice();
           for (const item of updates) {
-            if (item === null || typeof item !== 'object' || typeof item.id !== 'string' || item.id === '') continue;
-            const at = next.findIndex((entry) => entry.id === item.id);
+            if (item === null || typeof item !== 'object') continue;
+            // Two keys: the message id (the settings list knows it) or the text
+            // being replaced (the chat does not need to know it).
+            const hasId = typeof item.id === 'string' && item.id !== '';
+            const hasFrom = typeof item.from === 'string' && item.from !== '';
+            if (!hasId && !hasFrom) continue;
+            const at = next.findIndex((entry) => (hasId ? entry.id === item.id : entry.from === item.from));
             if (item.text === null) {
               if (at !== -1) next.splice(at, 1);
               continue;
             }
             if (typeof item.text !== 'string' || item.text.length === 0 || item.text.length > 20000) continue;
-            if (at !== -1) next[at] = { id: item.id, text: item.text };
-            else next.push({ id: item.id, text: item.text });
+            const entry = hasId ? { id: item.id, text: item.text } : { from: item.from, text: item.text };
+            if (at !== -1) next[at] = entry;
+            else next.push(entry);
           }
           if (next.length > 50) next.splice(0, next.length - 50);
           state.edits = next;
-          for (const entry of next) editsMap.set(entry.id, entry.text);
-          for (const id of [...editsMap.keys()]) {
-            if (!next.some((entry) => entry.id === id)) editsMap.delete(id);
+          editsMap.clear();
+          editsByText.clear();
+          for (const entry of next) {
+            if (typeof entry.id === 'string') editsMap.set(entry.id, entry.text);
+            else if (typeof entry.from === 'string') editsByText.set(entry.from, entry.text);
           }
           const path = writeState(profileDir, state);
           ctx.logger.info(

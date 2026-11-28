@@ -444,6 +444,32 @@ test('the change record keeps the text the chat shows, so it can be matched', as
   assert.ok(note.diff.some((segment) => segment.kind === 'del' && segment.text === '。'));
 });
 
+test('an edit made from the chat needs no session and lands in the next request', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'oh-my-token-'));
+  const { listeners, routes } = mount({}, { profileDir: dir });
+  const post = fakeResponse();
+  await routes.get('/dsh-oh-my-token/edit').handler(
+    postReq({ items: [{ from: 'Original question.', text: 'Edited from the chat' }] }),
+    post,
+  );
+  assert.equal(post.status, 200);
+  assert.deepEqual(post.json().items, [], 'no session yet, and that is fine');
+  const written = JSON.parse(readFileSync(join(dir, 'dsh-oh-my-token.state.json'), 'utf8'));
+  assert.deepEqual(written.edits, [{ from: 'Original question.', text: 'Edited from the chat' }]);
+
+  // The session starts afterwards; the text edit still applies to its request.
+  const history = [
+    { id: 'u1', role: 'user', source: { kind: 'user' }, content: [{ type: 'text', text: 'Original question.' }] },
+  ];
+  const session = { messages: history, deriveMessages: () => history };
+  await listeners.get('agent/pre-step')(
+    { agent: { session }, messages: [] },
+    async () => ({ kind: 'enter', messages: [] }),
+  );
+  assert.equal(session.deriveMessages()[0].content[0].text, 'Edited from the chat');
+  assert.equal(history[0].content[0].text, 'Original question.', 'the durable log is untouched');
+});
+
 test('conversation edits are persisted in the state file', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'oh-my-token-'));
   const { routes } = mount({}, { profileDir: dir });

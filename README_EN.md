@@ -60,7 +60,7 @@ To change a budget, add the field under that row in the profile's `cordis.patch.
 - Advanced: budgets, `minChars`/`minGain`, retrieval thresholds, over-budget recovery (`spill`/`rerun`/`none`), `logEvery`, and the plugin master switch;
 - A three-way scope shared by the prose transforms (punctuation / words) (`off` / prose outputs only / all prose);
 - The word table editor: one row per word with an optional replacement (empty = delete), saved as `prose.politenessWords`;
-- Conversation editing: rewrite recent messages; the rewrite only ships in the next request, never the durable log, and can be restored;
+- Conversation editing: rewrite recent messages; the rewrite only ships in the next request, never the durable log, and can be restored. Each message of the live turn also has a 改写 button in the chat; it matches on the message text, so it needs no session knowledge and works right after a restart;
 - The transform record: each recent prose change shown as a diff, removed words struck through in red and new text in green;
 - The savings record: this process and all time, tokens and characters removed, the saved share, a per-tool table, and a message/reply strip count;
 - The profile directory the choice is written to, so you can see whether a switch actually persisted.
