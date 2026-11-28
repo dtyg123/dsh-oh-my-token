@@ -330,11 +330,37 @@ window.__ModuleLoader__.load({
         if (!Object.is(turn, next)) setTurn(next);
       });
 
+      /**
+       * The element that renders this message's text. A reply's 改写 lives in
+       * the turn-tail node, whose own subtree holds no body, so the search falls
+       * back to the nearest preceding rendered text block.
+       */
+      const readBody = () => {
+        const ref = anchor.current;
+        if (ref === null) return null;
+        const item = ref.closest('[data-chat-flow-key]');
+        const direct = item?.querySelector('[data-message-bubble], [data-text-interaction-source]');
+        if (direct !== null && direct !== undefined) return direct;
+        for (let node = item?.previousElementSibling ?? null, step = 0; node !== null && step < 8; step += 1) {
+          const found = node.matches('[data-text-interaction-source]')
+            ? node
+            : node.querySelector('[data-text-interaction-source]');
+          if (found !== null && found !== undefined) return found;
+          node = node.previousElementSibling;
+        }
+        // Last resort: the nearest rendered text block before the control.
+        let best = null;
+        for (const element of document.querySelectorAll('[data-text-interaction-source]')) {
+          if ((element.compareDocumentPosition(ref) & Node.DOCUMENT_POSITION_FOLLOWING) === 0) break;
+          best = element;
+        }
+        return best;
+      };
+
       /** The message text as the chat shows it, which is what the host holds. */
       const readShown = () => {
-        const item = anchor.current?.closest('[data-chat-flow-key]') ?? null;
-        const body = item?.querySelector('[data-message-bubble], [data-text-interaction-source]');
-        return body === null || body === undefined ? '' : bodyText(body).text;
+        const body = readBody();
+        return body === null ? '' : bodyText(body).text;
       };
 
       // No look-up and no message id: the edit names the text it replaces, so it
@@ -342,7 +368,7 @@ window.__ModuleLoader__.load({
       const openEditor = () => {
         const shown = readShown();
         if (shown.trim() === '') {
-          setStatus('没读到这条消息的文本');
+          setStatus('这条消息没有可改写的文本');
           return;
         }
         setText(shown);
