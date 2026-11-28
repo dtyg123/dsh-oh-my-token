@@ -89,9 +89,9 @@ test('identity', () => {
   assert.deepEqual(inject, ['tools']);
 });
 
-test('registers its three listeners and four routes', () => {
+test('registers its four listeners and four routes', () => {
   const { listeners, routes, infos } = mount({});
-  assert.deepEqual([...listeners.keys()], ['tools/post-execute', 'agent/pre-step', 'llm/stream']);
+  assert.deepEqual([...listeners.keys()], ['tools/post-execute', 'agent/pre-step', 'system-prompt/assemble', 'llm/stream']);
   assert.deepEqual([...routes.keys()], ['/dsh-oh-my-token/state', '/dsh-oh-my-token/stats', '/dsh-oh-my-token/prompt', '/dsh-oh-my-token/edit']);
   assert.equal(infos.length, 1);
 });
@@ -323,37 +323,31 @@ test('an empty patch is rejected', async () => {
   assert.equal(response.status, 400);
 });
 
-test('the prompt route returns the prompt actually in use, plugin sections included', async () => {
-  const systemPrompt = {
-    assemble: async (context) => {
-      assert.equal(context?.preview, undefined, 'the real assembly is read, not a preview');
-      return {
-        sections: [
-          { name: 'persona', text: 'You are an AI agent.', interpolate: true },
-          { name: 'other-plugin/memory', text: 'Use pnpm in this workspace.', interpolate: true },
-        ],
-        contexts: [],
-        variables: {},
-      };
-    },
+test('the prompt route serves the snapshot the last request actually carried', async () => {
+  const { listeners, routes } = mount({});
+  const before = fakeResponse();
+  await routes.get('/dsh-oh-my-token/prompt').handler({ method: 'GET' }, before);
+  assert.deepEqual(before.json(), { prompt: '', capturedAt: null, source: 'none', sections: 0 });
+
+  const handler = listeners.get('system-prompt/assemble');
+  const assembly = {
+    sections: [
+      { name: 'persona', text: 'You are an AI agent.', interpolate: true },
+      { name: 'other-plugin/memory', text: 'Use pnpm in this workspace.', interpolate: true },
+    ],
+    contexts: [],
+    variables: {},
   };
-  const { routes } = mount({}, { services: { systemPrompt } });
+  const result = await handler(assembly, {}, async () => assembly);
+  assert.equal(result, assembly, 'the listener only observes');
+
   const response = fakeResponse();
   await routes.get('/dsh-oh-my-token/prompt').handler({ method: 'GET' }, response);
-  assert.equal(response.status, 200);
   const body = response.json();
   assert.equal(body.prompt, 'You are an AI agent.\n\nUse pnpm in this workspace.');
   assert.equal(body.sections, 2);
   assert.equal(body.source, 'live');
   assert.equal(body.capturedAt, null);
-});
-
-test('the prompt route stays quiet when the services are missing', async () => {
-  const { routes } = mount({});
-  const response = fakeResponse();
-  await routes.get('/dsh-oh-my-token/prompt').handler({ method: 'GET' }, response);
-  assert.equal(response.status, 200);
-  assert.deepEqual(response.json(), { prompt: '', capturedAt: null, source: 'empty' });
 });
 
 test('the state route persists numeric config and the master switch', async () => {

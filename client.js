@@ -562,6 +562,7 @@ window.__ModuleLoader__.load({
       promptCopy: '复制全文',
       promptCopied: '已复制',
       promptStats: (sections, chars) => `${sections} 段 · ${chars} 字符`,
+      promptNone: '还没有发出过请求。先随便对话一句，插件会记下那次真正发给模型的提示词，再点「获取」。',
       promptEmpty: '没有读到提示词（宿主未注册系统提示词服务）。',
       advanced: '高级配置',
       advancedHint: '数字与枚举项改完点「保存配置」；开关立即生效。',
@@ -974,6 +975,7 @@ window.__ModuleLoader__.load({
           setPrompt({
             text: typeof body?.prompt === 'string' ? body.prompt : '',
             sections: typeof body?.sections === 'number' ? body.sections : 0,
+            none: body?.source === 'none',
           });
           setPromptCopied(false);
           setError('');
@@ -1446,9 +1448,11 @@ window.__ModuleLoader__.load({
             : button(promptCopied ? text.promptCopied : text.promptCopy, () => { copyPrompt(); }, false)),
         prompt === null
           ? h('div', { style: { marginTop: '6px', fontSize: '11px', lineHeight: '16px', color: 'var(--dsw-alias-label-secondary)' } }, text.promptHint)
-          : prompt.text === ''
-            ? h('div', { style: { marginTop: '6px', fontSize: '11px', color: 'var(--dsw-alias-label-secondary)' } }, text.promptEmpty)
-            : h('pre', {
+          : prompt.none === true
+            ? h('div', { style: { marginTop: '6px', fontSize: '11px', lineHeight: '16px', color: 'var(--dsw-alias-label-secondary)' } }, text.promptNone)
+            : prompt.text === ''
+              ? h('div', { style: { marginTop: '6px', fontSize: '11px', color: 'var(--dsw-alias-label-secondary)' } }, text.promptEmpty)
+              : h('pre', {
               style: {
                 margin: '8px 0 0', padding: '8px 10px', borderRadius: '8px',
                 border: '1px solid var(--dsw-alias-border-l1)',
