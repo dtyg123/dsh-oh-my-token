@@ -555,9 +555,14 @@ window.__ModuleLoader__.load({
         filtered: '仅散文输出',
         all: '所有散文',
       },
-      systemPrompt: '系统提示词',
-      systemPromptHint: '把提示词拆成若干小段（卡片），从上到下按顺序拼到现有系统提示词末尾，保存后下一次请求生效。',
-      systemPromptVariables: '{{变量}}：{{provider}} 会替换为当前模型供应商、{{model}} 替换为当前模型名；写其他写法不替换，保持字面量，也不会因此报错。',
+      prompt: '完整提示词',
+      promptHint: '这里显示实际发给模型的系统提示词：核心提示词 + 各插件注册的段落，按真实顺序拼接，变量已替换。点「获取」重新读取。',
+      promptFetch: '获取提示词',
+      promptRefreshing: '读取中…',
+      promptCopy: '复制全文',
+      promptCopied: '已复制',
+      promptStats: (sections, chars) => `${sections} 段 · ${chars} 字符`,
+      promptEmpty: '没有读到提示词（宿主未注册系统提示词服务）。',
       advanced: '高级配置',
       advancedHint: '数字与枚举项改完点「保存配置」；开关立即生效。',
       saveConfig: '保存配置',
@@ -583,16 +588,7 @@ window.__ModuleLoader__.load({
         'retrieval.maxGrepMatches': 'grep 匹配上限',
         logEvery: '每 N 次打印日志',
       },
-      systemPromptPlaceholder: '写下这一段的提示词…',
-      addSegment: '添加一小段',
-      moveUp: '上移',
-      moveDown: '下移',
-      removeSegment: '删除这一段',
-      emptySegments: '还没有任何段落。点击「添加一小段」开始。',
-      saveSystemPrompt: '保存系统提示词',
-      restoreSystemPrompt: '恢复默认提示词',
-      nothingToRead: '没有读到当前生效的系统提示词（服务端未返回内容）。',
-      modes: {
+      nothingToRead: '没有读到当前生效的系统提示词（服务端未返回内容）。',      modes: {
         pytest: ['pytest 结果', '通过时只留一行结论；失败时保留 FAILED、断言与摘要'],
         git: ['git 输出', 'status 干净时折叠成一行，diff 只留文件头和变更行'],
         tsc: ['tsc 输出', '只保留 error TS 开头的行与总数，告警丢弃'],
@@ -603,7 +599,6 @@ window.__ModuleLoader__.load({
         grepCap: ['搜索结果截断', '匹配过多时只留前 N 条并说明剩余数量'],
         proseStrip: ['标点整理', '段首标点删去；挨着的两个标点只留一个（逗号+句号留句号）；句末连续的 . ， 。 ， 删掉；省略号不动'],
         politenessStrip: ['客套词删除/替换', '删去或替换「谢谢」「请」「please」「thanks」等；词表可在下方自定义，代码、URL、路径不动'],
-        systemPrompt: ['修改系统提示词', '把若干小段分段拼接到系统提示词末尾'],
       },
       file: '配置目录',
       none: '未找到配置目录，改动不会落盘',
@@ -728,55 +723,6 @@ window.__ModuleLoader__.load({
       ),
       h(Switch, { on, disabled: busy === id, label, mode: id, onToggle: () => onToggle(id, !on) }),
       );
-    }
-
-    /** One prompt segment card: its text, and the move/remove controls. */
-    function SegmentCard(props) {
-      const { segment, index, count, text, disabled, onText, onMove, onRemove } = props;
-      const control = (label, onClick, off, warning) => h('button', {
-        type: 'button',
-        disabled: disabled || off,
-        onClick,
-        style: {
-          padding: '2px 6px', borderRadius: '5px', font: 'inherit',
-          border: '1px solid var(--dsw-alias-border-l1)',
-          background: 'var(--dsw-alias-bg-layer-1)',
-          color: warning ? 'var(--dsw-alias-state-error-primary)' : 'var(--dsw-alias-label-primary)',
-          fontSize: '11px', lineHeight: '15px',
-          cursor: disabled || off ? 'default' : 'pointer',
-          opacity: disabled || off ? 0.5 : 1,
-        },
-      }, label);
-      return h('div', {
-        style: {
-          padding: '7px 9px', borderRadius: '8px',
-          border: '1px solid var(--dsw-alias-border-l1)',
-          background: 'var(--dsw-alias-bg-layer-1)',
-        },
-      },
-      h('div', { style: { display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' } },
-        h('span', {
-          style: { fontSize: '10px', color: 'var(--dsw-alias-label-secondary)' },
-        }, `${index + 1}/${count}`),
-        h('div', { style: { flex: '1 1 auto' } }),
-        control(text.moveUp, () => onMove(-1), index === 0),
-        control(text.moveDown, () => onMove(1), index === count - 1),
-        control(text.removeSegment, onRemove, false, true),
-      ),
-      h('textarea', {
-        value: segment.text ?? '',
-        onChange: (event) => onText(event.target.value),
-        placeholder: text.systemPromptPlaceholder,
-        maxLength: 8000,
-        rows: 3,
-        disabled,
-        style: {
-          width: '100%', boxSizing: 'border-box', padding: '7px',
-          borderRadius: '6px', border: '1px solid var(--dsw-alias-border-l1)',
-          background: 'transparent', color: 'var(--dsw-alias-label-primary)',
-          font: 'inherit', fontSize: '12px', lineHeight: '18px', resize: 'vertical',
-        },
-      }));
     }
 
     /** One bordered card. */
@@ -919,7 +865,9 @@ window.__ModuleLoader__.load({
       const [error, setError] = React.useState('');
       const [busy, setBusy] = React.useState('');
       const [confirming, setConfirming] = React.useState(false);
-      const [spDraft, setSpDraft] = React.useState(null);
+      const [prompt, setPrompt] = React.useState(null);
+      const [promptBusy, setPromptBusy] = React.useState(false);
+      const [promptCopied, setPromptCopied] = React.useState(false);
       const [cfgDraft, setCfgDraft] = React.useState(null);
       const [wordsDraft, setWordsDraft] = React.useState(null);
       const [editItems, setEditItems] = React.useState(null);
@@ -940,16 +888,6 @@ window.__ModuleLoader__.load({
       }, [text]);
 
       React.useEffect(() => { load(); }, [load]);
-      React.useEffect(() => {
-        if (spDraft === null && Array.isArray(state?.systemPrompt?.segments)) {
-          // Loaded cards may predate the id-bearing editor; give every card a
-          // stable key so reorder/edit/remove target the right one.
-          setSpDraft({ segments: state.systemPrompt.segments.map((segment, index) => ({
-            ...segment,
-            id: segment.id ?? `seg-${index}-${Date.now().toString(36)}`,
-          })) });
-        }
-      }, [state, spDraft]);
       React.useEffect(() => {
         if (cfgDraft === null && state?.config) setCfgDraft(state.config);
       }, [state, cfgDraft]);
@@ -979,14 +917,13 @@ window.__ModuleLoader__.load({
        * Send one patch and adopt the Host's answer. The switch moves at once
        * and reverts on failure, so the page never disagrees with the policy.
        */
-      const commit = async (patch, proseScope, systemPrompt) => {
+      const commit = async (patch, proseScope) => {
         const previous = state;
         setState((current) => {
           if (current === null) return current;
           return {
             ...current,
             proseScope: proseScope === undefined ? current.proseScope : proseScope,
-            systemPrompt: systemPrompt === undefined ? current.systemPrompt : systemPrompt,
             modes: current.modes.map((mode) => (Object.hasOwn(patch, mode.id) ? { ...mode, on: patch[mode.id] } : mode)),
           };
         });
@@ -997,7 +934,6 @@ window.__ModuleLoader__.load({
             body: JSON.stringify({
               modes: patch,
               ...(proseScope === undefined ? {} : { proseScope }),
-              ...(systemPrompt === undefined ? {} : { systemPrompt }),
             }),
           });
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -1028,56 +964,35 @@ window.__ModuleLoader__.load({
         }
       };
 
-      const saveSystemPrompt = async () => {
-        setBusy('systemPrompt');
-        try {
-          await commit({}, undefined, { segments: (spDraft?.segments ?? []).map((segment) => ({ text: segment.text ?? '' })) });
-        } finally {
-          setBusy('');
-        }
-      };
-
-      /** A fresh segment id; short enough for section names, unique enough for a page. */
-      const nextSegmentId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
-
-      /** Patch the draft's segments array for the card column. */
-      const patchSegments = (update) => setSpDraft((draft) => ({ segments: update(draft?.segments ?? []) }));
-
-      const addSegment = () => patchSegments((segments) => [...segments, { id: nextSegmentId(), text: '' }]);
-      const setSegmentText = (index, text) => patchSegments((segments) =>
-        segments.map((segment, i) => (i === index ? { ...segment, text } : segment)));
-      const removeSegment = (index) => patchSegments((segments) => segments.filter((_, i) => i !== index));
-      const moveSegment = (index, delta) => patchSegments((segments) => {
-        const target = index + delta;
-        if (index < 0 || index >= segments.length || target < 0 || target >= segments.length) return segments;
-        const next = segments.slice();
-        const [segment] = next.splice(index, 1);
-        next.splice(target, 0, segment);
-        return next;
-      });
-
-      /** Read the currently effective default prompt and split it into cards. */
-      const restoreSystemPrompt = async () => {
-        setBusy('systemPrompt');
+      /** Read the prompt the next request will actually carry. */
+      const readPrompt = async () => {
+        setPromptBusy(true);
         try {
           const response = await fetch(PROMPT_ENDPOINT, { headers: { accept: 'application/json' } });
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
           const body = await response.json();
-          const prompt = typeof body?.prompt === 'string' ? body.prompt : '';
-          if (prompt === '') {
-            setError(text.nothingToRead);
-            return;
-          }
-          const segments = prompt.split(/\n{2,}/)
-            .map((text) => text.trim())
-            .filter((text) => text !== '')
-            .map((text) => ({ id: nextSegmentId(), text }));
-          setSpDraft({ segments });
+          setPrompt({
+            text: typeof body?.prompt === 'string' ? body.prompt : '',
+            sections: typeof body?.sections === 'number' ? body.sections : 0,
+          });
+          setPromptCopied(false);
           setError('');
         } catch (failure) {
           setError(`${text.failed}: ${String(failure?.message ?? failure)}`);
         } finally {
-          setBusy('');
+          setPromptBusy(false);
+        }
+      };
+
+      /** Copy the whole prompt; a blocked clipboard falls back to selecting it. */
+      const copyPrompt = async () => {
+        const value = prompt?.text ?? '';
+        if (value === '') return;
+        try {
+          await navigator.clipboard.writeText(value);
+          setPromptCopied(true);
+        } catch {
+          setError('复制被浏览器拒绝，请手动选中文本复制');
         }
       };
 
@@ -1235,7 +1150,6 @@ window.__ModuleLoader__.load({
       const session = state?.session ?? {};
       const tools = Array.isArray(cumulative.tools) ? cumulative.tools : [];
       const scopes = Array.isArray(state?.scopes) ? state.scopes : ['off', 'filtered', 'all'];
-      const spSegments = Array.isArray(spDraft?.segments) ? spDraft.segments : [];
 
       const group = (title, ids) => h(Card, null,
         h('div', { style: { fontSize: '12px', fontWeight: 600, marginBottom: '6px' } }, title),
@@ -1521,42 +1435,36 @@ window.__ModuleLoader__.load({
           : h('div', { style: { fontSize: '11px', color: 'var(--dsw-alias-label-secondary)' } }, text.notesEmpty),
       ),
       h(Card, null,
-        h('div', { style: { fontSize: '12px', fontWeight: 600, marginBottom: '6px' } }, text.systemPrompt),
-        h(ModeRow, { id: 'systemPrompt', on: modeOf('systemPrompt'), text, busy, onToggle: toggle }),
-        h('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '6px' } },
-          spSegments.length === 0
-            ? h('div', {
-              style: { fontSize: '11px', lineHeight: '16px', color: 'var(--dsw-alias-label-secondary)' },
-            }, text.emptySegments)
-            : spSegments.map((segment, index) => h(SegmentCard, {
-              key: segment.id ?? index,
-              segment,
-              index,
-              count: spSegments.length,
-              text,
-              disabled: !modeOf('systemPrompt'),
-              onText: (value) => setSegmentText(index, value),
-              onMove: (delta) => moveSegment(index, delta),
-              onRemove: () => removeSegment(index),
-            })),
-        ),
-        h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px', flexWrap: 'wrap' } },
-          button(text.addSegment, () => { addSegment(); }, !modeOf('systemPrompt') || busy === 'systemPrompt'),
-          button(text.saveSystemPrompt, () => { saveSystemPrompt(); }, !modeOf('systemPrompt') || busy === 'systemPrompt'),
-          button(text.restoreSystemPrompt, () => { restoreSystemPrompt(); }, !modeOf('systemPrompt') || busy !== ''),
-        ),
+        h('div', { style: { display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px', marginBottom: '6px' } },
+          h('span', { style: { fontSize: '12px', fontWeight: 600 } }, text.prompt),
+          h('span', { style: { fontSize: '10px', color: 'var(--dsw-alias-label-secondary)' } },
+            prompt === null ? '' : text.promptStats(prompt.sections, prompt.text.length))),
+        h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' } },
+          button(promptBusy ? text.promptRefreshing : text.promptFetch, () => { readPrompt(); }, promptBusy),
+          prompt === null || prompt.text === ''
+            ? null
+            : button(promptCopied ? text.promptCopied : text.promptCopy, () => { copyPrompt(); }, false)),
+        prompt === null
+          ? h('div', { style: { marginTop: '6px', fontSize: '11px', lineHeight: '16px', color: 'var(--dsw-alias-label-secondary)' } }, text.promptHint)
+          : prompt.text === ''
+            ? h('div', { style: { marginTop: '6px', fontSize: '11px', color: 'var(--dsw-alias-label-secondary)' } }, text.promptEmpty)
+            : h('pre', {
+              style: {
+                margin: '8px 0 0', padding: '8px 10px', borderRadius: '8px',
+                border: '1px solid var(--dsw-alias-border-l1)',
+                background: 'var(--dsw-alias-bg-layer-1)',
+                color: 'var(--dsw-alias-label-primary)',
+                font: 'inherit', fontSize: '11px', lineHeight: '17px',
+                whiteSpace: 'pre-wrap', overflowWrap: 'anywhere',
+                maxHeight: '320px', overflowY: 'auto',
+              },
+            }, prompt.text),
         h('div', {
           style: {
             marginTop: '6px', fontSize: '11px', lineHeight: '16px',
             color: 'var(--dsw-alias-label-secondary)',
           },
-        }, text.systemPromptHint),
-        h('div', {
-          style: {
-            marginTop: '3px', fontSize: '11px', lineHeight: '16px',
-            color: 'var(--dsw-alias-label-secondary)',
-          },
-        }, text.systemPromptVariables),
+        }, text.promptHint),
       ),
       h(Card, null,
         h('div', { style: { fontSize: '12px', fontWeight: 600, marginBottom: '4px' } }, text.byTool),

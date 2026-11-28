@@ -34,10 +34,7 @@
 import { resolveConfig } from './lib/config.js';
 import { compressToolResult, normalizeDecision } from './lib/gate.js';
 import { stripAssistantStream, stripClaimedMessages, stripHistoryMessages } from './lib/messages.js';
-import {
-  applySystemPrompt, describeLiveAssembly, emptySystemPrompt,
-  sanitizeSystemPrompt,
-} from './lib/system-prompt.js';
+import { describeLiveAssembly } from './lib/system-prompt.js';
 import {
   MODE_IDS, PROSE_SCOPES, applyConfigOverrides, effectiveConfig, mergeConfigPatch, readState,
   resolveModes, sanitizeConfigPatch, sanitizeEdits, sanitizeModePatch, sanitizeRecent, sanitizeScope,
@@ -94,7 +91,6 @@ export function apply(ctx, config) {
     enabled: typeof persisted?.enabled === 'boolean' ? persisted.enabled : row.enabled,
     modes: { ...resolveModes(row), ...(persisted?.modes ?? {}) },
     proseScope: persisted?.proseScope ?? row.prose.scope,
-    systemPrompt: persisted?.systemPrompt ?? emptySystemPrompt(),
     config: persisted?.config ?? {},
     edits: sanitizeEdits(persisted?.edits) ?? [],
     // The change record survives a restart, so the page is not blank every time
@@ -129,17 +125,16 @@ export function apply(ctx, config) {
 
   const session = emptyStats();
   let cumulative = readStats(profileDir);
-  // Live read for the restore button: assemble the currently registered
-  // sections on demand, so the default prompt is readable on first use with no
-  // message ever sent. `preview` keeps our own edit out, so what comes back is
-  // the original "default" prompt, not the one augmented by the custom text.
+  // The prompt that is actually in use: assemble the registered sections on
+  // demand, with no `preview` flag, so this is byte-for-byte what the next
+  // request carries — the core prompt plus everything other plugins injected.
   const livePrompt = async () => {
     try {
       const assemble = ctx.get?.('systemPrompt')?.assemble?.bind(ctx.get('systemPrompt'));
       if (typeof assemble !== 'function') return undefined;
-      return describeLiveAssembly(await assemble({ preview: true }));
+      return describeLiveAssembly(await assemble());
     } catch (error) {
-      ctx.logger?.warn?.(`oh-my-token: live prompt read failed (${String(error?.message ?? error)})`);
+      ctx.logger?.warn?.(`oh-my-token: prompt read failed (${String(error?.message ?? error)})`);
       return undefined;
     }
   };
@@ -170,7 +165,6 @@ export function apply(ctx, config) {
     modes: MODE_IDS.map((id) => ({ id, on: state.modes[id] !== false })),
     proseScope: state.proseScope,
     scopes: PROSE_SCOPES,
-    systemPrompt: state.systemPrompt,
     config: applyConfigOverrides(row, state.config),
     recent: state.recent.slice(-50).reverse(),
     profileDir: profileDir ?? null,
@@ -329,15 +323,6 @@ export function apply(ctx, config) {
     return messages === decision.messages ? decision : { ...decision, messages };
   });
 
-  // The official prompt seam: one extra section appended to, or replacing,
-  // the assembled system prompt. Context sections are left alone. A `preview`
-  // assembly (the restore button reading the original prompt) skips the edit.
-  ctx.on('system-prompt/assemble', async (assembly, _context, next) => {
-    const result = await next();
-    if (!state.enabled || state.modes.systemPrompt !== true || _context?.preview) return result;
-    return applySystemPrompt(result, { enabled: true, ...state.systemPrompt });
-  });
-
   // Wrap the LLM chunk stream at the outermost waterfall position. The
   // `block-end` text is what the assembler uses for the assistant message and
   // what the durable stream records, so rewriting it here covers both.
@@ -378,17 +363,15 @@ export function apply(ctx, config) {
           const body = await readJsonBody(request);
           const patch = sanitizeModePatch(body?.modes);
           const scope = sanitizeScope(body?.proseScope);
-          const systemPrompt = sanitizeSystemPrompt(body?.systemPrompt);
           const configPatch = sanitizeConfigPatch(body?.config);
           const enabled = typeof body?.enabled === 'boolean' ? body.enabled : undefined;
-          if (Object.keys(patch).length === 0 && scope === undefined && systemPrompt === undefined
+          if (Object.keys(patch).length === 0 && scope === undefined
             && Object.keys(configPatch).length === 0 && enabled === undefined) {
-            sendJson(response, 400, { error: 'no valid switch values, proseScope, systemPrompt, config or enabled' });
+            sendJson(response, 400, { error: 'no valid switch values, proseScope, config or enabled' });
             return;
           }
           Object.assign(state.modes, patch);
           if (scope !== undefined) state.proseScope = scope;
-          if (systemPrompt !== undefined) state.systemPrompt = systemPrompt;
           if (enabled !== undefined) state.enabled = enabled;
           if (Object.keys(configPatch).length > 0) state.config = mergeConfigPatch(state.config, configPatch);
           Object.assign(policy, effectiveConfig(applyConfigOverrides(row, state.config), state));
@@ -454,9 +437,8 @@ export function apply(ctx, config) {
           response.end();
           return;
         }
-        // The restore button reads the currently effective default prompt:
-        // assemble the registered sections live so it works from the first
-        // launch, before any request exists. `preview` keeps the edit off.
+        // The page reads the prompt that is actually in use: every registered
+        // section, assembled live, so plugin-injected sections are included.
         const snapshot = await livePrompt();
         sendJson(response, 200, snapshot ?? { prompt: '', capturedAt: null, source: 'empty' });
       },

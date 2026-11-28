@@ -55,7 +55,7 @@ To change a budget, add the field under that row in the profile's `cordis.patch.
 
 **Settings → 省 Token** is the management panel:
 
-- One switch per transform (5 command filters, RTK structure compaction, 2 retrieval transforms, the punctuation tidy, the word delete/replace table, the system-prompt editor);
+- One switch per transform (5 command filters, RTK structure compaction, 2 retrieval transforms, the punctuation tidy, the word delete/replace table);
 - A plain-language compression-strength pick (gentle / default / aggressive) that sets the budgets and min-rewrite thresholds in one click, with the raw numbers still available under "advanced";
 - Advanced: budgets, `minChars`/`minGain`, retrieval thresholds, over-budget recovery (`spill`/`rerun`/`none`), `logEvery`, and the plugin master switch;
 - A three-way scope shared by the prose transforms (punctuation / words) (`off` / prose outputs only / all prose);
@@ -69,15 +69,13 @@ Changes apply on the next tool call — no restart. The choice is written to `ds
 
 Three exact routes back the page: `/dsh-oh-my-token/state`, `/dsh-oh-my-token/stats`, and `/dsh-oh-my-token/prompt` (reads the currently effective system prompt).
 
-## System prompt
+## Full prompt
 
-At the bottom of Settings → 省 Token, the 系统提示词 card lets you enable the switch and split what you want appended into **segment cards** — each card is one piece of prose; "添加一小段" adds a card, "上移 / 下移" reorder, "删除这一段" removes it. On save, all cards are **joined top-to-bottom into the final system prompt** and appended after the existing sections. The old `{ mode, text }` config migrates to a single card automatically.
+The 完整提示词 card in Settings → 省 Token is **read-only**, not an editor: press 获取提示词 and the plugin asks the host to assemble the system prompt right now, so what you see is exactly what the next request would carry — the core prompt, the host's context, and **sections other plugins injected**, in the same order. Variables such as `{{provider}}` and `{{model}}` are substituted with their current values; a variable with no value stays literal instead of failing the read.
 
-- each card becomes its own `interpolate: false` section — known variables are already substituted by us, so unknown `{{...}}` stays literal instead of throwing as an unknown variable;
-- card order is prompt order;
-- runtime context snapshots are untouched, and changes apply on the next request with no restart.
-- `{{variables}}`: DSH currently ships `{{provider}}` (the active model provider) and `{{model}}` (the active model). Both are replaced with their current value on save; any other spelling stays literal without error.
-- 「恢复默认提示词」live-assembles the currently effective system prompt — readable from the very first use, before any message is sent — and **splits it into cards** on the blank-line boundaries, so you can rewrite on top of the default. It always reads the original prompt without your injected text.
+- 复制全文 copies the text to the clipboard;
+- the card's header shows `N sections · M characters`, so a composed prompt can be checked at a glance;
+- the plugin never edits the prompt — it only reads it.
 
 ## Configuration
 
@@ -136,7 +134,7 @@ Walked through "every byte the model could act on" once more:
 - **File reads**: large `read` gets a symbol outline, large `grep` gets capped. Going further (AST-only, skip import blocks) would trade "text the model can quote" for "a summary the model has to ask for again", with a real chance of dropping the one line that matters. Not worth it.
 - **JSON / images**: collapsing repeated JSON objects is the next candidate, but for a lockfile one deleted line can send the model after the wrong version — asymmetric risk, deferred. Image bytes are not text; that cost lives in the upstream multimodal encoder, where no plugin-side compression is safe.
 - **Conversation text**: covered by the word table, punctuation tidy and the conversation editor. Anything more aggressive (summarising history) needs another LLM call, which breaks the no-helper-process constraint.
-- **System prompt**: append/resegment only, no auto-trim — every word in a prompt is a constraint the user chose, and the cost of dropping one is unmeasurable.
+- **System prompt**: read-only. Every word in a prompt is a constraint the user chose, so the plugin never trims it and never appends to it.
 
 ## Design constraints
 

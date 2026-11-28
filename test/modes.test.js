@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
-  MODE_IDS, STATE_FILE, applyConfigOverrides, effectiveConfig, readState, resolveModes,
+  MODE_IDS, STATE_FILE, STATE_VERSION, applyConfigOverrides, effectiveConfig, readState, resolveModes,
   sanitizeConfigPatch, sanitizeModePatch, sanitizeScope, stateDirectory, writeState,
 } from '../lib/modes.js';
 import { resolveConfig } from '../lib/config.js';
@@ -95,17 +95,23 @@ test('state round-trips through the profile directory', () => {
   const state = {
     modes: { git: false, proseStrip: true },
     proseScope: 'all',
-    systemPrompt: { segments: [{ text: 'First.' }, { id: 'k', text: 'Second.' }] },
   };
   const path = writeState(dir, state);
   assert.equal(path, join(dir, STATE_FILE));
   assert.deepEqual(readState(dir), state);
 });
 
-test('the old { mode, text } editor state migrates to segments on write and read', () => {
+test('an older state file that still carries the prompt editor is read without it', () => {
   const dir = mkdtempSync(join(tmpdir(), 'oh-my-token-state-'));
-  writeState(dir, { modes: {}, systemPrompt: { mode: 'append', text: 'Old text.' } });
-  assert.deepEqual(readState(dir).systemPrompt, { segments: [{ text: 'Old text.' }] });
+  writeFileSync(join(dir, STATE_FILE), JSON.stringify({
+    version: STATE_VERSION,
+    modes: { git: false },
+    proseScope: 'all',
+    systemPrompt: { segments: [{ text: 'Old text.' }] },
+  }));
+  const read = readState(dir);
+  assert.equal(read.modes.git, false);
+  assert.equal('systemPrompt' in read, false);
 });
 
 test('the change record survives a restart, junk entries are dropped', () => {
@@ -172,7 +178,6 @@ test('state round-trips the master switch and config overrides', () => {
     modes: { git: false },
     proseScope: 'all',
     config: { budgets: { default: 7000 }, recovery: 'rerun', logEvery: 5 },
-    systemPrompt: { segments: [] },
   };
   writeState(dir, state);
   const read = readState(dir);

@@ -89,9 +89,9 @@ test('identity', () => {
   assert.deepEqual(inject, ['tools']);
 });
 
-test('registers its four listeners and four routes', () => {
+test('registers its three listeners and four routes', () => {
   const { listeners, routes, infos } = mount({});
-  assert.deepEqual([...listeners.keys()], ['tools/post-execute', 'agent/pre-step', 'system-prompt/assemble', 'llm/stream']);
+  assert.deepEqual([...listeners.keys()], ['tools/post-execute', 'agent/pre-step', 'llm/stream']);
   assert.deepEqual([...routes.keys()], ['/dsh-oh-my-token/state', '/dsh-oh-my-token/stats', '/dsh-oh-my-token/prompt', '/dsh-oh-my-token/edit']);
   assert.equal(infos.length, 1);
 });
@@ -157,13 +157,12 @@ test('GET state lists every switch and the prose scope', async () => {
   assert.equal(response.status, 200);
   assert.deepEqual(state.modes.map((mode) => mode.id), [
     'pytest', 'git', 'tsc', 'packageManager', 'generic', 'rtk', 'readOutline', 'grepCap',
-    'proseStrip', 'politenessStrip', 'systemPrompt',
+    'proseStrip', 'politenessStrip',
   ]);
-  assert.ok(state.modes.filter((mode) => mode.id !== 'systemPrompt').every((mode) => mode.on === true));
-  assert.equal(state.modes.find((mode) => mode.id === 'systemPrompt').on, false);
+  assert.ok(state.modes.every((mode) => mode.on === true));
   assert.equal(state.proseScope, 'filtered');
   assert.deepEqual(state.scopes, ['off', 'filtered', 'all']);
-  assert.deepEqual(state.systemPrompt, { segments: [] });
+  assert.equal('systemPrompt' in state, false, 'the prompt editor is gone');
   assert.equal(state.cumulative.savedChars, 0);
 });
 
@@ -317,45 +316,22 @@ test('llm/stream strips the reply block-end and records the savings', async () =
   assert.equal(response.json().session.savedChars, 1);
 });
 
-test('system-prompt/assemble appends the segments in order once the switch is on', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'oh-my-token-'));
-  const { listeners, routes } = mount({}, { profileDir: dir });
-  const handler = listeners.get('system-prompt/assemble');
-  const assembly = { sections: [{ name: 'persona', text: 'Be brief.' }], contexts: [], variables: {} };
-  const assembled = (input) => handler(input, {}, async () => input);
-
-  assert.equal(await assembled(assembly), assembly, 'off by default');
-  const response = fakeResponse();
-  await routes.get('/dsh-oh-my-token/state').handler(postReq({
-    modes: { systemPrompt: true },
-    systemPrompt: { segments: [{ id: 'a', text: 'First.' }, { text: 'Second.' }] },
-  }), response);
-  assert.equal(response.status, 200);
-
-  const appended = await assembled(assembly);
-  assert.equal(appended.sections.length, 3);
-  assert.equal(appended.sections[1].text, 'First.');
-  assert.equal(appended.sections[2].text, 'Second.');
-  assert.ok(appended.sections[1].order < appended.sections[2].order);
-  assert.equal(appended.sections[1].interpolate, false);
-
-  const written = JSON.parse(readFileSync(join(dir, 'dsh-oh-my-token.state.json'), 'utf8'));
-  assert.deepEqual(written.systemPrompt, { segments: [{ id: 'a', text: 'First.' }, { text: 'Second.' }] });
-});
-
-test('an empty patch is rejected when it carries no systemPrompt either', async () => {
+test('an empty patch is rejected', async () => {
   const { routes } = mount({});
   const response = fakeResponse();
   await routes.get('/dsh-oh-my-token/state').handler(postReq({ modes: {} }), response);
   assert.equal(response.status, 400);
 });
 
-test('the prompt route live-assembles the current prompt for restore', async () => {
+test('the prompt route returns the prompt actually in use, plugin sections included', async () => {
   const systemPrompt = {
     assemble: async (context) => {
-      assert.equal(context?.preview, true, 'restore assembly is marked preview');
+      assert.equal(context?.preview, undefined, 'the real assembly is read, not a preview');
       return {
-        sections: [{ name: 'a', text: 'Default prompt.', interpolate: true }],
+        sections: [
+          { name: 'persona', text: 'You are an AI agent.', interpolate: true },
+          { name: 'other-plugin/memory', text: 'Use pnpm in this workspace.', interpolate: true },
+        ],
         contexts: [],
         variables: {},
       };
@@ -366,7 +342,8 @@ test('the prompt route live-assembles the current prompt for restore', async () 
   await routes.get('/dsh-oh-my-token/prompt').handler({ method: 'GET' }, response);
   assert.equal(response.status, 200);
   const body = response.json();
-  assert.equal(body.prompt, 'Default prompt.');
+  assert.equal(body.prompt, 'You are an AI agent.\n\nUse pnpm in this workspace.');
+  assert.equal(body.sections, 2);
   assert.equal(body.source, 'live');
   assert.equal(body.capturedAt, null);
 });
@@ -377,20 +354,6 @@ test('the prompt route stays quiet when the services are missing', async () => {
   await routes.get('/dsh-oh-my-token/prompt').handler({ method: 'GET' }, response);
   assert.equal(response.status, 200);
   assert.deepEqual(response.json(), { prompt: '', capturedAt: null, source: 'empty' });
-});
-
-test('the system-prompt/assemble listener skips its edit for preview assemblies', async () => {
-  const { listeners, routes } = mount({});
-  const handler = listeners.get('system-prompt/assemble');
-  const assembly = { sections: [{ name: 'persona', text: 'Be brief.' }], contexts: [], variables: {} };
-  await routes.get('/dsh-oh-my-token/state').handler(postReq({
-    modes: { systemPrompt: true },
-    systemPrompt: { segments: [{ text: 'Only this.' }] },
-  }), fakeResponse());
-  assert.equal(await handler(assembly, { preview: true }, async () => assembly), assembly);
-  const appended = await handler(assembly, {}, async () => assembly);
-  assert.equal(appended.sections.length, 2);
-  assert.equal(appended.sections[1].text, 'Only this.');
 });
 
 test('the state route persists numeric config and the master switch', async () => {

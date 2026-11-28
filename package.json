@@ -1,7 +1,7 @@
 {
   "name": "dsh-oh-my-token",
   "version": "0.0.1",
-  "description": "DeepSeek Harness 原生省 Token 插件：命令输出过滤、RTK 结构压缩、检索式读取、客套词与句末标点清理、系统提示词编辑，以及一个可调全部配置并报告节省量的设置页。纯 JS，无 RTK 二进制、无 codegraph 服务。",
+  "description": "DeepSeek Harness 原生省 Token 插件：命令输出过滤、RTK 结构压缩、检索式读取、客套词与句末标点清理，以及一个可调全部配置、查看实际系统提示词并报告节省量的设置页。纯 JS，无 RTK 二进制、无 codegraph 服务。",
   "type": "module",
   "main": "./index.js",
   "exports": {
@@ -35,7 +35,7 @@
   },
   "meta": {
     "title": "Oh My Token",
-    "description": "在源头压缩命令输出，把超大的 read 变成符号大纲，清理散文里的客套词与句末标点，并可追加或替换系统提示词。每个变换在同一个设置页都有开关，页面还会报告实际省下的字符。"
+    "description": "在源头压缩命令输出，把超大的 read 变成符号大纲，清理散文里的客套词与句末标点，并可只读查看实际发给模型的完整系统提示词（含插件注入的段落）。每个变换在同一个设置页都有开关，页面还会报告实际省下的字符。"
   },
   "dsh": {
     "engines": {
