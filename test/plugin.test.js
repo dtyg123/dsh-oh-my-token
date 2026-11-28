@@ -456,6 +456,15 @@ test('an edit made from the chat needs no session and lands in the next request'
   const written = JSON.parse(readFileSync(join(dir, 'dsh-oh-my-token.state.json'), 'utf8'));
   assert.deepEqual(written.edits, [{ from: 'Original question.', text: 'Edited from the chat' }]);
 
+  // The page gets the diff, so the message can show the change straight away.
+  const state = fakeResponse();
+  await routes.get('/dsh-oh-my-token/state').handler({ method: 'GET' }, state);
+  const preview = state.json().editDiffs;
+  assert.equal(preview.length, 1);
+  assert.equal(preview[0].from, 'Original question.');
+  assert.ok(preview[0].segments.some((segment) => segment.kind === 'del' && segment.text.includes('Original')));
+  assert.ok(preview[0].segments.some((segment) => segment.kind === 'add' && segment.text.includes('Edited')));
+
   // The session starts afterwards; the text edit still applies to its request.
   const history = [
     { id: 'u1', role: 'user', source: { kind: 'user' }, content: [{ type: 'text', text: 'Original question.' }] },

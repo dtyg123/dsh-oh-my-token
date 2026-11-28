@@ -60,46 +60,46 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * Chat-written edits keyed by the text they replace: the message still shows
+     * that text, so its diff is drawn where it will change on the next request.
+     * @returns {boolean} whether anything new was remembered.
+     */
+    function rememberEdits(list) {
+      if (!Array.isArray(list)) return false;
+      let added = false;
+      for (const entry of list) {
+        if (typeof entry?.from !== 'string' || entry.from === '') continue;
+        if (!Array.isArray(entry.segments)) continue;
+        diffByText.set(entry.from, entry.segments);
+        added = true;
+      }
+      if (added) removalCache.clear();
+      return added;
+    }
+
+    /**
      * Where the automatic step cut words out of a message.
      *
-     * A record is one changed line, so a message is scanned for every recorded
-     * line it contains and each removal is moved to its place in the message.
-     * Each removal then hangs on the character next to it, because a node must
-     * cover at least one character and this keeps reference chips intact.
+     * A record is one changed line, so only a whole line of the body may match
+     * it: a sentence quoted inside the reasoning trace is not that line and
+     * stays untouched. Each removal hangs on the character next to it, so the
+     * mark lands in place without swallowing the text around it.
      */
     function removalsOf(text) {
       const cached = removalCache.get(text);
       if (cached !== undefined) return cached;
+      if (diffByText.size === 0) {
+        removalCache.set(text, null);
+        return null;
+      }
       const out = [];
-      for (const [shown, segments] of diffByText) {
-        const at = text.indexOf(shown);
-        if (at < 0) continue;
-        let offset = at;
-        let pending = null;
-        for (const segment of segments) {
-          const value = typeof segment?.text === 'string' ? segment.text : '';
-          if (segment?.kind === 'del') {
-            if (pending === null) pending = { removed: value, added: '', start: offset };
-            else pending.removed += value;
-            continue;
-          }
-          if (segment?.kind === 'add') {
-            if (pending !== null) pending.added += value;
-            continue;
-          }
-          if (value === '') continue;
-          if (pending !== null) {
-            pending.start = offset;
-            out.push(pending);
-            pending = null;
-          }
-          offset += value.length;
-        }
-        if (pending !== null) {
-          // A removal at the very end hangs on the character before it.
-          pending.start = Math.max(at, offset - 1);
-          pending.trailing = true;
-          out.push(pending);
+      const whole = diffByText.get(text) ?? diffByText.get(text.trim());
+      if (whole !== undefined) {
+        collectRemovals(whole, 0, out);
+      } else {
+        for (const span of lineSpans(text)) {
+          const segments = diffByText.get(text.slice(span.start, span.end));
+          if (segments !== undefined) collectRemovals(segments, span.start, out);
         }
       }
       if (out.length === 0) {
@@ -112,32 +112,51 @@ window.__ModuleLoader__.load({
       return out;
     }
 
-    const DIFF_RULE_ID = 'oh-my-token';
-
-    /** The user-message rule: one node per removal, so it renders where it was. */
-    const diffRule = {
-      id: DIFF_RULE_ID,
-      order: 50,
-      match(text, from) {
-        if (!liveTextsNow.has(text) && !liveTextsNow.has(text.trim())) return undefined;
-        const removals = removalsOf(String(text));
-        if (removals === null) return undefined;
-        for (const removal of removals) {
-          if (removal.start < from) continue;
-          return {
-            id: DIFF_RULE_ID,
-            start: removal.start,
-            end: removal.start + 1,
-            data: {
-              removed: removal.removed,
-              added: removal.added,
-              trailing: removal.trailing === true,
-            },
-          };
+    /** One diff's removals, moved to their offsets in the surrounding body. */
+    function collectRemovals(segments, base, out) {
+      let offset = base;
+      let pending = null;
+      for (const segment of segments) {
+        const value = typeof segment?.text === 'string' ? segment.text : '';
+        if (segment?.kind === 'del') {
+          if (pending === null) pending = { removed: value, added: '', start: offset };
+          else pending.removed += value;
+          continue;
         }
-        return undefined;
-      },
-    };
+        if (segment?.kind === 'add') {
+          if (pending !== null) pending.added += value;
+          continue;
+        }
+        if (value === '') continue;
+        if (pending !== null) {
+          pending.start = offset;
+          out.push(pending);
+          pending = null;
+        }
+        offset += value.length;
+      }
+      if (pending !== null) {
+        // A removal at the very end hangs on the character before it.
+        pending.start = Math.max(base, offset - 1);
+        pending.trailing = true;
+        out.push(pending);
+      }
+    }
+
+    /** Each non-empty trimmed line of a body, with its offsets in that body. */
+    function lineSpans(text) {
+      const spans = [];
+      let start = 0;
+      for (const line of text.split('\n')) {
+        const trimmed = line.trim();
+        if (trimmed !== '') {
+          const lead = line.length - line.trimStart().length;
+          spans.push({ start: start + lead, end: start + lead + trimmed.length });
+        }
+        start += line.length + 1;
+      }
+      return spans;
+    }
 
     /**
      * A reply's body is rendered as markdown by the harness, so it has no text
@@ -180,18 +199,23 @@ window.__ModuleLoader__.load({
         removed.setAttribute(MARK_ATTR, '1');
         removed.style.cssText = RED_CSS;
         removed.textContent = removal.removed;
+        const addedNode = () => {
+          if (removal.added === '') return null;
+          const added = document.createElement('span');
+          added.setAttribute(MARK_ATTR, '1');
+          added.style.cssText = GREEN_CSS;
+          added.textContent = removal.added;
+          return added;
+        };
         if (removal.trailing === true) {
           fragment.appendChild(document.createTextNode(anchor));
           fragment.appendChild(removed);
+          const added = addedNode();
+          if (added !== null) fragment.appendChild(added);
         } else {
           fragment.appendChild(removed);
-          if (removal.added !== '') {
-            const added = document.createElement('span');
-            added.setAttribute(MARK_ATTR, '1');
-            added.style.cssText = GREEN_CSS;
-            added.textContent = removal.added;
-            fragment.appendChild(added);
-          }
+          const added = addedNode();
+          if (added !== null) fragment.appendChild(added);
           fragment.appendChild(document.createTextNode(anchor));
         }
         cursor = removal.local + 1;
@@ -199,11 +223,6 @@ window.__ModuleLoader__.load({
       if (cursor < value.length) fragment.appendChild(document.createTextNode(value.slice(cursor)));
       return fragment;
     }
-
-    /** The text the live turn shows; the rule marks nothing outside it. */
-    let liveTextsNow = new Set();
-    /** A signature of that set, so a turn change re-registers the rule once. */
-    let liveSignature = '';
 
     /** The flow items of the newest turn — the part that is still live. */
     function liveItems() {
@@ -217,53 +236,36 @@ window.__ModuleLoader__.load({
       return items.filter((item) => Number(item.getAttribute('data-chat-turn')) === best);
     }
 
-    /** The message text a live turn shows, without our own marks. */
-    function liveTexts(items) {
-      const texts = new Set();
-      for (const item of items) {
-        for (const body of item.querySelectorAll('[data-text-interaction-source]')) {
-          const { text } = bodyText(body);
-          if (text === '') continue;
-          texts.add(text);
-          texts.add(text.trim());
-        }
-      }
-      return texts;
-    }
-
     /**
      * Decorate the live turn only: a turn that has moved on is already
      * compressed, so it keeps neither marks nor an edit control and stops
      * paying for them.
+     *
+     * The reasoning trace is skipped on purpose: the plugin never changes it
+     * (its bytes are signed), so a sentence quoted there must not be marked.
      */
     function decorateChat() {
       if (typeof document === 'undefined') return false;
       const items = liveItems();
       const live = new Set(items);
-      const texts = liveTexts(items);
-      const signature = [...texts].sort().join('\u0000');
-      const scopeChanged = signature !== liveSignature;
-      liveSignature = signature;
-      liveTextsNow = texts;
       setLiveTurn(items.reduce((max, item) => Math.max(max, Number(item.getAttribute('data-chat-turn')) || 0), -1));
 
-      // Drop our marks outside the live turn — once per turn change, not on
-      // every pass, so the observer is not fed by its own cleanup.
-      if (scopeChanged) {
-        for (const mark of document.querySelectorAll(`[${MARK_ATTR}]`)) {
-          const item = mark.closest('[data-chat-flow-key]');
-          if (item === null || !live.has(item)) mark.remove();
-        }
-        for (const root of document.querySelectorAll(`[${MARKED_ATTR}]`)) {
-          const item = root.closest('[data-chat-flow-key]');
-          if (item === null || !live.has(item)) root.removeAttribute(MARKED_ATTR);
-        }
+      // Drop our marks outside the live turn. Running this every pass is cheap
+      // and self-limiting: once nothing matches, it mutates nothing.
+      for (const mark of document.querySelectorAll(`[${MARK_ATTR}]`)) {
+        const item = mark.closest('[data-chat-flow-key]');
+        if (item === null || !live.has(item)) mark.remove();
+      }
+      for (const root of document.querySelectorAll(`[${MARKED_ATTR}]`)) {
+        const item = root.closest('[data-chat-flow-key]');
+        if (item === null || !live.has(item)) root.removeAttribute(MARKED_ATTR);
       }
 
       if (diffByText.size > 0) {
         for (const item of items) {
-          for (const root of item.querySelectorAll('[data-text-interaction-source]:not([data-message-bubble])')) {
+          for (const root of item.querySelectorAll('[data-text-interaction-source]')) {
             if (root.hasAttribute(MARKED_ATTR)) continue;
+            if (root.closest('[data-variant="think"]') !== null) continue;
             const { text, nodes } = bodyText(root);
             if (text === '' || nodes.length === 0) continue;
             const removals = removalsOf(text);
@@ -295,7 +297,7 @@ window.__ModuleLoader__.load({
         }
       }
 
-      return scopeChanged;
+      return false;
     }
 
     /** The newest turn number, published so a message control can hide itself. */
@@ -387,6 +389,8 @@ window.__ModuleLoader__.load({
             body: JSON.stringify({ items: [{ from: text, text: draft }] }),
           });
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const body = await response.json();
+          if (rememberEdits(body?.editDiffs) && nudgeDiffRules !== null) nudgeDiffRules();
           setOpen(false);
           setStatus('已改写 · 只在下一次请求生效');
         } catch (failure) {
@@ -474,31 +478,8 @@ window.__ModuleLoader__.load({
         )) : null);
     }
 
-    const RED_MARK = {
-      color: 'var(--dsw-alias-state-error-primary)',
-      textDecoration: 'line-through',
-      background: 'rgba(239, 68, 68, 0.16)',
-      borderRadius: '3px',
-    };
-    const GREEN_MARK = {
-      color: 'var(--dsw-alias-state-success-primary)',
-      background: 'rgba(34, 197, 94, 0.18)',
-      borderRadius: '3px',
-      fontWeight: 600,
-    };
-
-    /** One anchor character plus the words the request dropped next to it. */
-    function ProseDiffNode(props) {
-      const data = props?.node?.data ?? {};
-      const removed = typeof data.removed === 'string' ? data.removed : '';
-      const added = typeof data.added === 'string' ? data.added : '';
-      const anchor = h('span', { key: 'anchor' }, props?.raw ?? '');
-      return h('span', null,
-        data.trailing === true ? anchor : null,
-        h('span', { key: 'removed', style: RED_MARK }, removed),
-        added === '' ? null : h('span', { key: 'added', style: GREEN_MARK }, added),
-        data.trailing === true ? null : anchor);
-    }
+    /** Every slot this plugin registers is keyed by this one id. */
+    const DIFF_RULE_ID = 'oh-my-token';
 
     /**
      * Plain-language strength presets: one pick sets the budgets and the
@@ -905,7 +886,8 @@ window.__ModuleLoader__.load({
           const response = await fetch(STATE_ENDPOINT, { headers: { accept: 'application/json' } });
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
           const body = await response.json();
-          if (rememberDiffs(body?.recent) && nudgeDiffRules !== null) nudgeDiffRules();
+          const changed = rememberDiffs(body?.recent) || rememberEdits(body?.editDiffs);
+          if (changed && nudgeDiffRules !== null) nudgeDiffRules();
           setState(body);
           setError('');
         } catch (failure) {
@@ -1586,34 +1568,21 @@ window.__ModuleLoader__.load({
     }
 
     return {
-      inject: ['slots', 'uiConversation'],
+      inject: ['slots'],
       apply(ctx) {
-        // Re-registering the rule publishes a new revision, and that revision is
-        // what makes an already-rendered message evaluate again once its record
-        // arrives — a plain Map change would leave it unmarked.
-        let releaseRule;
-        const armRule = () => {
-          if (releaseRule !== undefined) releaseRule();
-          releaseRule = ctx.uiConversation.userText.register(diffRule);
-        };
-        // Replies have no text hook, so their finished bodies are decorated and
-        // observed instead; the pass is a no-op when nothing matches.
+        // Messages and replies are decorated in their finished DOM; the pass is
+        // a no-op when nothing matches.
         let decorateNow = () => {};
         if (typeof document !== 'undefined' && typeof MutationObserver !== 'undefined') {
           let scheduled = 0;
           let applying = false;
           decorateNow = () => {
             applying = true;
-            let scopeChanged = false;
             try {
-              scopeChanged = decorateChat();
+              decorateChat();
             } finally {
               applying = false;
             }
-            // A new turn retires the old one's marks: re-register so already
-            // rendered bubbles evaluate again without them.
-            if (scopeChanged) armRule();
-            return scopeChanged;
           };
           const schedule = () => {
             if (applying || scheduled !== 0) return;
@@ -1630,11 +1599,7 @@ window.__ModuleLoader__.load({
           });
           decorateNow();
         }
-        nudgeDiffRules = () => {
-          armRule();
-          decorateNow();
-        };
-        armRule();
+        nudgeDiffRules = () => { decorateNow(); };
 
         // Keep the message → change map warm even while the settings page is
         // closed, because the chat renders messages at any time.
@@ -1642,10 +1607,8 @@ window.__ModuleLoader__.load({
           fetch(STATE_ENDPOINT, { headers: { accept: 'application/json' } })
             .then((response) => (response.ok ? response.json() : null))
             .then((body) => {
-              if (rememberDiffs(body?.recent)) {
-                armRule();
-                decorateNow();
-              }
+              const changed = rememberDiffs(body?.recent) || rememberEdits(body?.editDiffs);
+              if (changed) decorateNow();
             })
             .catch(() => {});
         };
@@ -1653,7 +1616,6 @@ window.__ModuleLoader__.load({
         const timer = setInterval(refreshDiffs, 3000);
         ctx.effect(() => () => {
           clearInterval(timer);
-          if (releaseRule !== undefined) releaseRule();
         });
 
         ctx.slots.inject('settings.section', () => ctx.slots.register({
@@ -1662,13 +1624,6 @@ window.__ModuleLoader__.load({
           order: 61,
           label: () => TEXT.nav,
         }, SavingsPage));
-
-        // Removed words in the person's own messages, marked where they were.
-        ctx.slots.inject('conversation.user.text.node', () => ctx.slots.register({
-          name: 'conversation.user.text.node',
-          key: DIFF_RULE_ID,
-          priority: 50,
-        }, ProseDiffNode));
 
         // 改写 lives in the harness's own message slots, so its reconciler owns
         // the DOM. A slot option this harness rejects must never take the

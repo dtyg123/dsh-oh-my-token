@@ -154,6 +154,15 @@ export function apply(ctx, config) {
     flush();
   });
 
+  /**
+   * The chat-written edits as diffs, so the message they will replace can show
+   * the removed words in red and the new ones in green right away. Capped: a
+   * pair larger than this is simply not previewed.
+   */
+  const editDiffs = () => state.edits
+    .filter((entry) => typeof entry.from === 'string' && entry.from.length + entry.text.length <= 4000)
+    .map((entry) => ({ from: entry.from, segments: diffWords(entry.from, entry.text) }));
+
   /** The state the settings page renders. */
   const statePayload = () => ({
     enabled: state.enabled,
@@ -162,6 +171,7 @@ export function apply(ctx, config) {
     scopes: PROSE_SCOPES,
     config: applyConfigOverrides(row, state.config),
     recent: state.recent.slice(-50).reverse(),
+    editDiffs: editDiffs(),
     profileDir: profileDir ?? null,
     session: summarize(session),
     cumulative: summarize(cumulative),
@@ -501,7 +511,7 @@ export function apply(ctx, config) {
             `oh-my-token: ${next.length} conversation edit(s) `
             + `${path === undefined ? 'NOT persisted (no profile directory)' : `persisted to ${path}`}`,
           );
-          sendJson(response, 200, { items: readRecentMessages(), saved: path ?? null });
+          sendJson(response, 200, { items: readRecentMessages(), editDiffs: editDiffs(), saved: path ?? null });
         } catch (error) {
           sendJson(response, 400, { error: String(error?.message ?? error) });
         }
