@@ -37,51 +37,80 @@ window.__ModuleLoader__.load({
     /** Text produced by a recorded change -> its diff segments. */
     const diffByText = new Map();
 
+    /** Set by `apply`: re-registers the rule so rendered messages re-evaluate. */
+    let nudgeDiffRules = null;
+
+    /** Memoized removals per message text; cleared when the record grows. */
+    const removalCache = new Map();
+
+    /** @returns {boolean} whether anything new was remembered. */
     function rememberDiffs(recent) {
-      if (!Array.isArray(recent)) return;
+      if (!Array.isArray(recent)) return false;
+      let added = false;
       for (const entry of recent) {
         if (typeof entry?.after !== 'string' || entry.after === '') continue;
         if (!Array.isArray(entry.diff)) continue;
+        if (diffByText.has(entry.after)) continue;
         diffByText.set(entry.after, entry.diff);
+        added = true;
       }
       // A long-lived tab would otherwise keep every message it ever saw.
       while (diffByText.size > 400) diffByText.delete(diffByText.keys().next().value);
+      if (added) removalCache.clear();
+      return added;
     }
 
-    /** One removal, anchored to the character it sits next to. */
+    /**
+     * Where the automatic step cut words out of a message.
+     *
+     * A record is one changed line, so a message is scanned for every recorded
+     * line it contains and each removal is moved to its place in the message.
+     * Each removal then hangs on the character next to it, because a node must
+     * cover at least one character and this keeps reference chips intact.
+     */
     function removalsOf(text) {
-      const segments = diffByText.get(text);
-      if (segments === undefined) return null;
+      const cached = removalCache.get(text);
+      if (cached !== undefined) return cached;
       const out = [];
-      let offset = 0;
-      let pending = null;
-      for (const segment of segments) {
-        const value = typeof segment?.text === 'string' ? segment.text : '';
-        if (segment?.kind === 'del') {
-          if (pending === null) pending = { removed: value, added: '', start: offset };
-          else pending.removed += value;
-          continue;
+      for (const [shown, segments] of diffByText) {
+        const at = text.indexOf(shown);
+        if (at < 0) continue;
+        let offset = at;
+        let pending = null;
+        for (const segment of segments) {
+          const value = typeof segment?.text === 'string' ? segment.text : '';
+          if (segment?.kind === 'del') {
+            if (pending === null) pending = { removed: value, added: '', start: offset };
+            else pending.removed += value;
+            continue;
+          }
+          if (segment?.kind === 'add') {
+            if (pending !== null) pending.added += value;
+            continue;
+          }
+          if (value === '') continue;
+          if (pending !== null) {
+            pending.start = offset;
+            out.push(pending);
+            pending = null;
+          }
+          offset += value.length;
         }
-        if (segment?.kind === 'add') {
-          if (pending !== null) pending.added += value;
-          continue;
-        }
-        if (value === '') continue;
         if (pending !== null) {
-          // The node must cover one character, so it anchors on the next one.
-          pending.start = offset;
+          // A removal at the very end hangs on the character before it.
+          pending.start = Math.max(at, offset - 1);
+          pending.trailing = true;
           out.push(pending);
-          pending = null;
         }
-        offset += value.length;
       }
-      if (pending !== null && offset > 0) {
-        // A removal at the very end hangs on the character before it.
-        pending.start = offset - 1;
-        pending.trailing = true;
-        out.push(pending);
+      if (out.length === 0) {
+        removalCache.set(text, null);
+        return null;
       }
-      return out.length === 0 ? null : out;
+      out.sort((left, right) => left.start - right.start);
+      removalCache.set(text, out);
+      while (removalCache.size > 200) removalCache.delete(removalCache.keys().next().value);
+      return out;
     }
 
     const DIFF_RULE_ID = 'oh-my-token';
@@ -147,11 +176,25 @@ window.__ModuleLoader__.load({
       React.useEffect(() => {
         if (typeof id !== 'string' || id === '') return undefined;
         let live = true;
-        fetch(`${DIFF_ENDPOINT}?id=${encodeURIComponent(id)}`, { headers: { accept: 'application/json' } })
-          .then((response) => (response.ok ? response.json() : null))
-          .then((body) => { if (live) setSegments(Array.isArray(body?.segments) ? body.segments : []); })
-          .catch(() => { if (live) setSegments([]); });
-        return () => { live = false; };
+        // The record is persisted by a debounced flush, so an empty answer is
+        // retried a couple of times before the chip gives up.
+        const timers = [];
+        const read = (attempt) => {
+          fetch(`${DIFF_ENDPOINT}?id=${encodeURIComponent(id)}`, { headers: { accept: 'application/json' } })
+            .then((response) => (response.ok ? response.json() : null))
+            .then((body) => {
+              if (!live) return;
+              const found = Array.isArray(body?.segments) ? body.segments : [];
+              if (found.length > 0 || attempt >= 3) setSegments(found);
+              else timers.push(setTimeout(() => read(attempt + 1), 1500));
+            })
+            .catch(() => { if (live) setSegments([]); });
+        };
+        read(0);
+        return () => {
+          live = false;
+          for (const timer of timers) clearTimeout(timer);
+        };
       }, [id]);
       if (!Array.isArray(segments)) return null;
       const changed = segments.filter((segment) => segment?.kind !== 'keep' && typeof segment?.text === 'string' && segment.text !== '');
@@ -622,7 +665,7 @@ window.__ModuleLoader__.load({
           const response = await fetch(STATE_ENDPOINT, { headers: { accept: 'application/json' } });
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
           const body = await response.json();
-          rememberDiffs(body?.recent);
+          if (rememberDiffs(body?.recent) && nudgeDiffRules !== null) nudgeDiffRules();
           setState(body);
           setError('');
         } catch (failure) {
@@ -1309,17 +1352,31 @@ window.__ModuleLoader__.load({
     return {
       inject: ['slots', 'uiConversation'],
       apply(ctx) {
+        // Re-registering the rule publishes a new revision, and that revision is
+        // what makes an already-rendered message evaluate again once its record
+        // arrives — a plain Map change would leave it unmarked.
+        let releaseRule;
+        const armRule = () => {
+          if (releaseRule !== undefined) releaseRule();
+          releaseRule = ctx.uiConversation.userText.register(diffRule);
+        };
+        nudgeDiffRules = () => { if (releaseRule !== undefined) armRule(); };
+        armRule();
+
         // Keep the message → change map warm even while the settings page is
         // closed, because the chat renders messages at any time.
         const refreshDiffs = () => {
           fetch(STATE_ENDPOINT, { headers: { accept: 'application/json' } })
             .then((response) => (response.ok ? response.json() : null))
-            .then((body) => rememberDiffs(body?.recent))
+            .then((body) => { if (rememberDiffs(body?.recent)) armRule(); })
             .catch(() => {});
         };
         refreshDiffs();
-        const timer = setInterval(refreshDiffs, 10000);
-        ctx.effect(() => () => clearInterval(timer));
+        const timer = setInterval(refreshDiffs, 3000);
+        ctx.effect(() => () => {
+          clearInterval(timer);
+          if (releaseRule !== undefined) releaseRule();
+        });
 
         ctx.slots.inject('settings.section', () => ctx.slots.register({
           name: 'settings.section',
@@ -1329,7 +1386,6 @@ window.__ModuleLoader__.load({
         }, SavingsPage));
 
         // Removed words in the person's own messages, marked where they were.
-        ctx.uiConversation.userText.register(diffRule);
         ctx.slots.inject('conversation.user.text.node', () => ctx.slots.register({
           name: 'conversation.user.text.node',
           key: DIFF_RULE_ID,
@@ -1340,7 +1396,7 @@ window.__ModuleLoader__.load({
         // rendered by the harness and offers no text hook.
         ctx.slots.inject('conversation.chat.assistant-actions', () => ctx.slots.register({
           name: 'conversation.chat.assistant-actions',
-          key: DIFF_RULE_ID,
+          id: DIFF_RULE_ID,
         }, AssistantDiffChip));
       },
     };

@@ -553,9 +553,24 @@ export function apply(ctx, config) {
           sendJson(response, 200, { segments: [] });
           return;
         }
-        const shown = text.length > 400 ? text.slice(0, 400) : text;
-        const note = [...state.recent].reverse().find((entry) => entry.after === shown);
-        sendJson(response, 200, { segments: note?.diff ?? [] });
+        const shown = text.length > 2000 ? text.slice(0, 2000) : text;
+        const seen = new Set();
+        const segments = [];
+        // A record is one changed line; the reply lists every recorded line it
+        // contains, in the order that puts the removals first.
+        for (let i = state.recent.length - 1; i >= 0; i -= 1) {
+          const note = state.recent[i];
+          if (typeof note.after !== 'string' || note.after === '') continue;
+          if (!shown.includes(note.after)) continue;
+          for (const segment of note.diff) {
+            if (segment.kind === 'keep') continue;
+            const key = `${segment.kind}\u0000${segment.text}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            segments.push(segment);
+          }
+        }
+        sendJson(response, 200, { segments });
       },
     }), 'oh-my-token: diff route');
   });
