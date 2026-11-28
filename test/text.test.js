@@ -83,6 +83,13 @@ test('a custom word list replaces instead of deleting', () => {
   );
 });
 
+test('automatic word replacement runs before punctuation tidy', () => {
+  assert.equal(
+    stripTrailingPeriods('请', { words: [{ word: '请', replace: '谢谢。' }] }),
+    '谢谢',
+  );
+});
+
 test('word matching keeps compounds and code safe', () => {
   const words = [{ word: '请', replace: '' }];
   assert.equal(stripTrailingPeriods('请求已发送。', { words }), '请求已发送');
