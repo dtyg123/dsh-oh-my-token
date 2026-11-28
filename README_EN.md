@@ -57,7 +57,7 @@ To change a budget, add the field under that row in the profile's `cordis.patch.
 - A plain-language compression-strength pick (gentle / default / aggressive) that sets the budgets and min-rewrite thresholds in one click, with the raw numbers still available under "advanced";
 - Advanced: budgets, `minChars`/`minGain`, retrieval thresholds, over-budget recovery (`spill`/`rerun`/`none`), `logEvery`, and the plugin master switch;
 - A three-way scope shared by the prose transforms (punctuation / words) (`off` / prose outputs only / all prose);
-- A custom word table: one row per word with an optional replacement (empty = delete), saved as `prose.politenessWords`; particles live in the same table. The defaults include 谢谢 / 好的 / 请 / please / thanks and particles such as 啊 / 呀 / 吧 / 呢 / 嘛 / 哦. Particles are only dropped at the end of a phrase, so 酒吧 / 网吧 / 毛呢 / 哗啦 stay intact. The table also has a “keep a line made up of one word” option;
+- A custom word-rule table: one row per word with an optional replacement (empty = delete), plus exact adjacent left/right protection contexts. Separate alternatives with `|`; when both sides are set, both must match. A line containing only the listed word is always kept. Built-in particles are matched at phrase ends and protect compounds such as 酒吧 / 网吧 / 毛呢 / 哗啦;
 - Each message of the live turn has a 改写 button in the chat; it matches on the message text, so it needs no session knowledge and works right after a restart;
 - The savings record: all time, tokens and characters removed, the saved share, a per-tool table, and a message/reply strip count;
 - The profile directory the choice is written to, so you can see whether a switch actually persisted.
@@ -93,8 +93,7 @@ The 完整提示词 card in Settings → 省 Token is **read-only**, not an edit
 | `retrieval.maxGrepMatches` | `50` | |
 | `prose.stripTrailingPeriod` | `true` | Tidy punctuation: drop a mark opening a paragraph; collapse two stuck-together marks to one (a comma and a period keep the period, same-strength keeps the right one); then drop the run of trailing `.` / `。` / `,` / `，` (an ASCII ellipsis is kept). |
 | `prose.stripPoliteness` | `true` | Delete or replace words on prose lines via the `politenessWords` table. |
-| `prose.keepWholeLine` | `true` | Keep a line made up of one listed word (with optional sentence-ending punctuation); only tidy its punctuation. Turn it off to apply deletion/replacement normally. |
-| `prose.politenessWords` | built-in rules | Each entry is `{ word, replace? }`: empty/omitted `replace` deletes the word, a string replaces it. The defaults include 谢谢 / 好的 / 请 / please / thanks and particles 啊 / 呀 / 吧 / 呢 / 嘛 / 哦, deleted only at a phrase end and guarded against splitting compounds. An explicit empty list turns the word step off. Lines containing URLs, paths, Markdown links or code are left alone. |
+| `prose.politenessWords` | built-in rules | Each entry is `{ word, replace?, unlessBefore?, unlessAfter? }`: empty/omitted `replace` deletes; each context array lists exact adjacent strings that protect the word. If both sides are set, both sides must match. A line made up only of the word (with optional sentence punctuation) is always preserved. An explicit empty list turns the word step off. URL, path, Markdown-link and code lines are left alone. Legacy `keepWholeLine` config is accepted but no longer controls this rule. |
 | `prose.scope` | `filtered` | `filtered` = only output a command filter marked as prose (e.g. `git log`); `all`; `off`. |
 | `recovery` | `spill` | `spill` \| `rerun` \| `none`. |
 | `logEvery` | `0` | Log a savings line every N rewritten results; `0` is quiet. |

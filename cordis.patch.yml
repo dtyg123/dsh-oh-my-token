@@ -47,19 +47,20 @@
           # Code, diffs, paths, URLs, versions and decimals are never touched.
           # scope: filtered (only prose outputs such as git log) | all | off.
           stripTrailingPeriod: true
-          # Word delete/replace: each entry is { word, replace? }; empty or
-          # omitted replace deletes the word, a string replaces it. The built-in
-          # list is shown in Settings and includes 谢谢 / 好的 / 请 / please /
+          # Word rules: each entry is { word, replace?, unlessBefore?, unlessAfter? };
+          # empty or omitted replace deletes; adjacent context arrays protect
+          # only when their conditions match. The built-in list is shown in Settings
+          # and includes 谢谢 / 好的 / 请 / please /
           # thanks and speech particles such as 啊 / 呀 / 吧 / 呢. Particles are
           # deleted only at a phrase end, so 酒吧 / 网吧 / 毛呢 / 哗啦 survive.
-          # When keepWholeLine is true, a line made up of one listed word is kept.
+          # A line made up only of one listed word is always kept.
           # URLs, paths, links and code-like lines are never rewritten.
           # stripPoliteness: true
-          keepWholeLine: true
           # politenessWords:
-          #   - word: 谢谢
-          #   - word: 请
-          #     replace: 拜托
+          #   - word: 好
+          #     replace: 棒
+          #     unlessBefore: [不, 没]
+          #     unlessAfter: [啊, 呀]
           stripPoliteness: true
           scope: filtered
 

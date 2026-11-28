@@ -93,8 +93,7 @@ dsh plugin --profile web add file:/path/to/dsh-oh-my-token
 | `retrieval.maxGrepMatches` | `50` | |
 | `prose.stripTrailingPeriod` | `true` | 标点整理：段首标点删去；相邻两个标点只留一个（逗号+句号留句号，同强保留右边）；再删句末**连续的** `.` / `。` / `,` / `，`（省略号除外）。 |
 | `prose.stripPoliteness` | `true` | 按 `politenessWords` 词表删去或替换散文行里的词。 |
-| `prose.keepWholeLine` | `true` | 词表命中整行（可带句末标点）时保留原词，只整理标点；关闭后按规则照常删除或替换。 |
-| `prose.politenessWords` | 内置规则 | 每项 `{ word, replace? }`：`replace` 留空或省略 = 删除，填字符串 = 替换。默认词表包含「谢谢 / 好的 / 请 / please / thanks…」以及「啊 / 呀 / 吧 / 呢 / 嘛 / 哦…」等语气词（语气词只在句尾或标点前删，含护栏防拆词）；配置空表 `[]` 则关闭词变换。含 URL、路径、Markdown 链接或代码的整行不会改。 |
+| `prose.politenessWords` | 内置规则 | 每项 `{ word, replace?, unlessBefore?, unlessAfter? }`：替换留空或省略即删除；前/后文是紧邻词语的保护条件，每侧可列多个备选（数组），两侧都设时必须同时命中才跳过该词。整行只有该词（可带句末标点）时始终保留；含 URL、路径、Markdown 链接或代码的整行不会改。默认语气词只在短语末尾匹配，酒吧 / 网吧 / 毛呢 / 哗啦等词有前文保护。配置空表 `[]` 则关闭词变换。旧配置项 `keepWholeLine` 仍可读取，但不再控制此固定规则。 |
 | `prose.scope` | `filtered` | `filtered` = 仅命令过滤器标记为散文的输出（如 `git log`）；`all`；`off`。 |
 | `recovery` | `spill` | `spill` \| `rerun` \| `none`。 |
 | `logEvery` | `0` | 每 N 次改写打印一条节省日志；`0` 为静默。 |

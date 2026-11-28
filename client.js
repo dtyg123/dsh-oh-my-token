@@ -621,12 +621,12 @@ window.__ModuleLoader__.load({
       },
       rawSettings: '高级数字（原始配置）',
       words: '自定义词表',
-      wordsHint: '每行一个词：右边留空就删除，填上内容就替换。语气词也在这张表里；只在句尾或标点前处理，所以「酒吧」「网吧」「毛呢」不会被拆。含 URL、路径或代码的整行不动。',
-      keepWholeLine: '整行只有这个词时保留',
-      keepWholeLineHint: '勾上后，单独的「好的。」不会被删或替换；放在句子里仍会处理。',
+      wordsHint: '整行只有该词时始终保留。前/后文保护填写词旁边紧邻的内容；多个备选用 | 分隔，两侧都填时两边都匹配才保护。语气词只在短语末尾匹配。',
       emptyWords: '词表为空，不做词语删除或替换。',
       wordLabel: '词',
       replaceLabel: '替换为空 = 删除',
+      unlessBeforeLabel: '前文保护（紧邻）',
+      unlessAfterLabel: '后文保护（紧邻）',
       addWord: '加一个词',
       saveWords: '保存词表',
     };
@@ -846,7 +846,12 @@ window.__ModuleLoader__.load({
       React.useEffect(() => {
         const words = state?.config?.prose?.politenessWords;
         if (wordsDraft === null && Array.isArray(words)) {
-          setWordsDraft(words.map((entry) => ({ word: entry.word, replace: entry.replace ?? '' })));
+          setWordsDraft(words.map((entry) => ({
+            word: entry.word,
+            replace: entry.replace ?? '',
+            unlessBefore: (entry.unlessBefore ?? []).join('|'),
+            unlessAfter: (entry.unlessAfter ?? []).join('|'),
+          })));
         }
       }, [state, wordsDraft]);
       React.useEffect(() => {
@@ -1013,7 +1018,7 @@ window.__ModuleLoader__.load({
 
       const setWordRow = (index, key, value) => setWordsDraft((rows) =>
         (rows ?? []).map((entry, i) => (i === index ? { ...entry, [key]: value } : entry)));
-      const addWordRow = () => setWordsDraft((rows) => [...(rows ?? []), { word: '', replace: '' }]);
+      const addWordRow = () => setWordsDraft((rows) => [...(rows ?? []), { word: '', replace: '', unlessBefore: '', unlessAfter: '' }]);
       const removeWordRow = (index) => setWordsDraft((rows) => (rows ?? []).filter((_, i) => i !== index));
 
       /** Persist the word list through the config channel (it is a config field). */
@@ -1022,13 +1027,25 @@ window.__ModuleLoader__.load({
         try {
           const words = (wordsDraft ?? [])
             .filter((entry) => entry.word !== '')
-            .map((entry) => (entry.replace !== '' ? { word: entry.word, replace: entry.replace } : { word: entry.word }));
+            .map((entry) => {
+              const rule = { word: entry.word };
+              if (entry.replace !== '') rule.replace = entry.replace;
+              for (const side of ['unlessBefore', 'unlessAfter']) {
+                const contexts = (entry[side] ?? '').split('|').map((context) => context.trim()).filter(Boolean);
+                if (contexts.length > 0) rule[side] = contexts;
+              }
+              return rule;
+            });
           const body = await postState({ config: { prose: {
             politenessWords: words,
-            keepWholeLine: cfgGet('prose.keepWholeLine') !== false,
           } } });
           const saved = body?.config?.prose?.politenessWords;
-          if (Array.isArray(saved)) setWordsDraft(saved.map((entry) => ({ word: entry.word, replace: entry.replace ?? '' })));
+          if (Array.isArray(saved)) setWordsDraft(saved.map((entry) => ({
+            word: entry.word,
+            replace: entry.replace ?? '',
+            unlessBefore: (entry.unlessBefore ?? []).join('|'),
+            unlessAfter: (entry.unlessAfter ?? []).join('|'),
+          })));
         } catch (failure) {
           setError(`${text.failed}: ${String(failure?.message ?? failure)}`);
         } finally {
@@ -1248,12 +1265,13 @@ window.__ModuleLoader__.load({
             : h('div', { style: { display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '6px' } },
               (wordsDraft ?? []).map((entry, index) => h('div', {
                 key: index,
-                style: { display: 'flex', gap: '6px', alignItems: 'center' },
+                style: { display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' },
               },
                 h('input', {
                   value: entry.word,
                   placeholder: text.wordLabel,
                   maxLength: 40,
+                  'aria-label': text.wordLabel,
                   disabled: busy === 'words',
                   onChange: (event) => setWordRow(index, 'word', event.target.value),
                   style: inputStyle,
@@ -1262,8 +1280,27 @@ window.__ModuleLoader__.load({
                   value: entry.replace,
                   placeholder: text.replaceLabel,
                   maxLength: 60,
+                  'aria-label': text.replaceLabel,
                   disabled: busy === 'words',
                   onChange: (event) => setWordRow(index, 'replace', event.target.value),
+                  style: inputStyle,
+                }),
+                h('input', {
+                  value: entry.unlessBefore ?? '',
+                  placeholder: text.unlessBeforeLabel,
+                  maxLength: 1700,
+                  'aria-label': text.unlessBeforeLabel,
+                  disabled: busy === 'words',
+                  onChange: (event) => setWordRow(index, 'unlessBefore', event.target.value),
+                  style: inputStyle,
+                }),
+                h('input', {
+                  value: entry.unlessAfter ?? '',
+                  placeholder: text.unlessAfterLabel,
+                  maxLength: 1700,
+                  'aria-label': text.unlessAfterLabel,
+                  disabled: busy === 'words',
+                  onChange: (event) => setWordRow(index, 'unlessAfter', event.target.value),
                   style: inputStyle,
                 }),
                 h('button', {
@@ -1279,18 +1316,6 @@ window.__ModuleLoader__.load({
                   },
                 }, '×'),
               ))),
-          h('label', { style: { display: 'flex', alignItems: 'flex-start', gap: '6px', marginTop: '8px', fontSize: '11px', color: 'var(--dsw-alias-label-secondary)', cursor: busy === 'words' ? 'default' : 'pointer' } },
-            h('input', {
-              type: 'checkbox',
-              checked: cfgGet('prose.keepWholeLine') !== false,
-              disabled: busy === 'words',
-              onChange: (event) => cfgSet('prose.keepWholeLine', event.target.checked),
-            }),
-            h('span', null,
-              h('span', { style: { color: 'var(--dsw-alias-label-primary)' } }, text.keepWholeLine),
-              h('span', { style: { display: 'block', marginTop: '2px' } }, text.keepWholeLineHint),
-            ),
-          ),
           h('div', { style: { display: 'flex', gap: '8px', marginTop: '6px', flexWrap: 'wrap' } },
             button(text.addWord, addWordRow, busy === 'words'),
             button(text.saveWords, saveWords, busy === 'words'),

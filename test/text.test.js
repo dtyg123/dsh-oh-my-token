@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  DEFAULT_POLITE_WORDS,
   collapseBlankLines,
   collapseRepeatedLines,
   countLines,
@@ -86,8 +87,8 @@ test('a custom word list replaces instead of deleting', () => {
 
 test('automatic word replacement runs before punctuation tidy', () => {
   assert.equal(
-    stripTrailingPeriods('请', { words: [{ word: '请', replace: '谢谢。' }], keepWholeLine: false }),
-    '谢谢',
+    stripTrailingPeriods('请', { words: [{ word: '请', replace: '谢谢。' }] }),
+    '请',
   );
 });
 
@@ -145,8 +146,25 @@ test('built-in particles are deleted only at a phrase boundary', () => {
 test('custom words keep a whole-line match when configured', () => {
   const words = [{ word: '保留', replace: 'changed' }];
   assert.equal(stripTrailingPeriods('保留。', { words }), '保留');
-  assert.equal(stripTrailingPeriods('保留。', { words, keepWholeLine: false }), 'changed');
+  assert.equal(stripTrailingPeriods('保留。', { words, keepWholeLine: false }), '保留');
   assert.equal(stripTrailingPeriods('请保留。', { words }), '请changed');
+});
+
+test('word rules protect exact adjacent contexts, combining both sides', () => {
+  const words = [{ word: '好', replace: '棒', unlessBefore: ['不', '没'], unlessAfter: ['啊'] }];
+  assert.equal(stripTrailingPeriods('不好啊。', { words }), '不好啊');
+  assert.equal(stripTrailingPeriods('没好啊。', { words }), '没好啊');
+  assert.equal(stripTrailingPeriods('不好嘛。', { words }), '不棒嘛');
+  assert.equal(stripTrailingPeriods('好啊。', { words }), '棒啊');
+});
+
+test('built-in context rules protect compounds and are exposed in the word list', () => {
+  const rules = new Map(DEFAULT_POLITE_WORDS.map((entry) => [entry.word, entry]));
+  assert.ok(rules.get('请').unlessBefore.includes('申'));
+  assert.ok(rules.get('请').unlessAfter.includes('求'));
+  assert.ok(rules.get('吧').unlessBefore.includes('酒'));
+  assert.equal(stripTrailingPeriods('请求已发送。'), '请求已发送');
+  assert.equal(stripTrailingPeriods('酒吧。'), '酒吧');
 });
 
 test('custom word rules never rewrite URL, path or link lines', () => {
