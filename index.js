@@ -40,7 +40,8 @@ import {
 } from './lib/system-prompt.js';
 import {
   MODE_IDS, PROSE_SCOPES, applyConfigOverrides, effectiveConfig, mergeConfigPatch, readState,
-  resolveModes, sanitizeConfigPatch, sanitizeEdits, sanitizeModePatch, sanitizeScope, stateDirectory, writeState,
+  resolveModes, sanitizeConfigPatch, sanitizeEdits, sanitizeModePatch, sanitizeRecent, sanitizeScope,
+  stateDirectory, writeState,
 } from './lib/modes.js';
 import { describeProseChange, diffWords } from './lib/text.js';
 import {
@@ -96,6 +97,9 @@ export function apply(ctx, config) {
     systemPrompt: persisted?.systemPrompt ?? emptySystemPrompt(),
     config: persisted?.config ?? {},
     edits: sanitizeEdits(persisted?.edits) ?? [],
+    // The change record survives a restart, so the page is not blank every time
+    // the app is reopened.
+    recent: sanitizeRecent(persisted?.recent) ?? [],
   };
   // A single object the gate reads on every call; a switch replaces its
   // contents rather than rebuilding the listener.
@@ -106,13 +110,13 @@ export function apply(ctx, config) {
   const editsMap = new Map(state.edits.map((item) => [item.id, item.text]));
 
   /** What the prose step removed/added, newest last; the page shows the tail. */
-  const recent = [];
   const recordProseNote = (label, before, after) => {
     const diff = diffWords(before, after);
     const notes = describeProseChange(before, after, policy.prose?.politenessWords);
     if (notes.length === 0 && !diff.some((segment) => segment.kind !== 'keep')) return;
-    recent.push({ at: Date.now(), label, notes, diff });
-    if (recent.length > 50) recent.shift();
+    state.recent.push({ at: Date.now(), label, notes, diff });
+    if (state.recent.length > 50) state.recent.shift();
+    scheduleFlush();
   };
 
   const session = emptyStats();
@@ -132,7 +136,12 @@ export function apply(ctx, config) {
     }
   };
   let timer;
-  const flush = () => writeStats(profileDir, cumulative);
+  const flush = () => {
+    writeStats(profileDir, cumulative);
+    // The change record lives in the same file as the switches, so a note is
+    // persisted by the debounced flush that follows it.
+    writeState(profileDir, state);
+  };
   const scheduleFlush = () => {
     if (profileDir === undefined || timer !== undefined) return;
     timer = setTimeout(() => {
@@ -155,7 +164,7 @@ export function apply(ctx, config) {
     scopes: PROSE_SCOPES,
     systemPrompt: state.systemPrompt,
     config: applyConfigOverrides(row, state.config),
-    recent: recent.slice(-50).reverse(),
+    recent: state.recent.slice(-50).reverse(),
     profileDir: profileDir ?? null,
     session: summarize(session),
     cumulative: summarize(cumulative),

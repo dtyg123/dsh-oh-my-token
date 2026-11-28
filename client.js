@@ -376,13 +376,23 @@ window.__ModuleLoader__.load({
         if (segment?.kind === 'del') {
           return h('span', {
             key: index,
-            style: { color: 'var(--dsw-alias-state-error-primary)', textDecoration: 'line-through' },
+            style: {
+              color: 'var(--dsw-alias-state-error-primary)',
+              textDecoration: 'line-through',
+              background: 'rgba(239, 68, 68, 0.18)',
+              borderRadius: '3px',
+            },
           }, String(segment.text));
         }
         if (segment?.kind === 'add') {
           return h('span', {
             key: index,
-            style: { color: 'var(--dsw-alias-state-success-primary)', fontWeight: 600 },
+            style: {
+              color: 'var(--dsw-alias-state-success-primary)',
+              fontWeight: 600,
+              background: 'rgba(34, 197, 94, 0.2)',
+              borderRadius: '3px',
+            },
           }, String(segment.text));
         }
         return h('span', { key: index, style: { color: 'var(--dsw-alias-label-primary)' } }, String(segment?.text ?? ''));

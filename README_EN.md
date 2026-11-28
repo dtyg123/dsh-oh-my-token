@@ -18,7 +18,7 @@ Plus two transformations the model never needs to read (independently switchable
 Plus two extras on the same derived path:
 
 - **Conversation editing** — rewrite any recent message from the settings page. The rewrite is only carried in the next request; it is never written to the durable log, and "restore" puts the original back.
-- **Transform record** — the settings page expands each recent prose change as a diff: removed words struck through in red, replaced or new text in green, the way a changed file reads on GitHub.
+- **Transform record** — the settings page expands each recent prose change as a diff: removed words struck through in red, replaced or new text in green, the way a changed file reads on GitHub. The record is written to the profile directory, so it survives a restart.
 
 ## What it keeps
 

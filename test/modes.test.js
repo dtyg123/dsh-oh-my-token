@@ -108,6 +108,28 @@ test('the old { mode, text } editor state migrates to segments on write and read
   assert.deepEqual(readState(dir).systemPrompt, { segments: [{ text: 'Old text.' }] });
 });
 
+test('the change record survives a restart, junk entries are dropped', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'oh-my-token-state-'));
+  writeState(dir, {
+    modes: {},
+    recent: [
+      { at: 1795842817621, label: 'user message', notes: ['标点×1'], diff: [
+        { kind: 'keep', text: '你好呀' },
+        { kind: 'del', text: '。' },
+        { kind: 'bogus', text: 'x' },
+      ] },
+      { at: 'yesterday', label: 'bad timestamp' },
+      { at: 1, label: 'tool', notes: [], diff: [] },
+    ],
+  });
+  const read = readState(dir);
+  assert.equal(read.recent.length, 1);
+  assert.deepEqual(read.recent[0].diff, [
+    { kind: 'keep', text: '你好呀' },
+    { kind: 'del', text: '。' },
+  ]);
+});
+
 test('a state file from another version is ignored, not guessed at', () => {
   const dir = mkdtempSync(join(tmpdir(), 'oh-my-token-state-'));
   writeFileSync(join(dir, STATE_FILE), JSON.stringify({ version: 99, modes: { git: false } }));
