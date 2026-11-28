@@ -32,6 +32,7 @@ test('effectiveConfig folds switches without disturbing budgets', () => {
   assert.equal(policy.rtk, true);
   assert.equal(policy.prose.stripTrailingPeriod, true);
   assert.equal(policy.prose.stripPoliteness, true);
+  assert.equal(policy.prose.keepWholeLine, true);
   assert.equal(policy.prose.scope, 'all');
   assert.equal(policy.prose.politenessWords, DEFAULT_POLITE_WORDS, 'the default word list rides along');
 });
@@ -157,6 +158,9 @@ test('config patches keep valid numbers and drop bad ones', () => {
     logEvery: 10,
   });
   assert.deepEqual(sanitizeConfigPatch({ recovery: 'magic', minGain: 2, minChars: 1.5 }), {});
+  assert.deepEqual(sanitizeConfigPatch({ prose: { keepWholeLine: false, keepWholeWord: true } }), {
+    prose: { keepWholeLine: false },
+  });
   assert.deepEqual(sanitizeConfigPatch(null), {});
 });
 

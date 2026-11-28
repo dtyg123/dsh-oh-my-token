@@ -370,7 +370,7 @@ window.__ModuleLoader__.load({
       const openEditor = () => {
         const shown = readShown();
         if (shown.trim() === '') {
-          setStatus('这条消息没有可改写的文本');
+          setStatus('这条消息没有可改的文本');
           return;
         }
         setText(shown);
@@ -392,7 +392,7 @@ window.__ModuleLoader__.load({
           const body = await response.json();
           if (rememberEdits(body?.editDiffs) && nudgeDiffRules !== null) nudgeDiffRules();
           setOpen(false);
-          setStatus('已改写 · 只在下一次请求生效');
+          setStatus('已改写 · 只影响下一次请求');
         } catch (failure) {
           setStatus(`保存失败：${String(failure?.message ?? failure)}`);
         }
@@ -442,7 +442,7 @@ window.__ModuleLoader__.load({
         },
         h('div', { style: { fontSize: '12px', fontWeight: 600 } }, '改写这条消息'),
         h('div', { style: { fontSize: '11px', color: 'var(--dsw-alias-label-secondary)' } },
-          '只写进下一次请求；磁盘上的历史不动，点取消即放弃。'),
+          '只写进下一次请求；历史不动，点取消就放弃。'),
         h('textarea', {
           value: draft,
           rows: 8,
@@ -522,7 +522,7 @@ window.__ModuleLoader__.load({
     const TEXT = {
       nav: '省 Token',
       title: '省 Token 管理',
-      subtitle: '在工具结果写入会话之前决定它进多少。只在这一处改写，历史保持追加，前缀缓存不受影响。',
+      subtitle: '工具结果进上下文之前，先决定它留多少。只在这里改，历史照旧追加，不碰前缀缓存。',
       tabs: {
         overview: '概览',
         compression: '压缩',
@@ -545,39 +545,39 @@ window.__ModuleLoader__.load({
       before: '改写前字符',
       saved: '移除的字符',
       ratio: '节省比例',
-      empty: '暂无记录。第一个被改写的工具结果出现后，这里就会有数字。',
+      empty: '还没有记录。等第一个工具结果被改写，这里就有数字了。',
       byTool: '按工具明细',
       tool: '工具',
       tokens: '节省 Token',
       switches: '开关',
-      switchesHint: '改动立即生效，无需重启。',
+      switchesHint: '改完立即生效，不用重启。',
       filters: '命令输出过滤',
       retrieval: '检索式读取',
       prose: '散文整理（标点 / 规则）',
-      proseHint: '只对判定为散文的行生效。代码、diff、路径、URL、版本号一律不动。',
+      proseHint: '只动真正是散文的行；代码、diff、路径、链接、版本号都不碰。',
       scopes: {
         off: '关闭',
         filtered: '仅散文输出',
         all: '所有散文',
       },
       prompt: '完整提示词',
-      promptHint: '这里显示实际发给模型的系统提示词：核心提示词 + 各插件注册的段落，按真实顺序拼接，变量已替换。点「获取」重新读取。',
+      promptHint: '这就是实际会发给模型的系统提示词：核心提示词加上各插件塞进来的段落，按真实顺序拼好，变量也已替换。点「获取」重读一遍。',
       promptFetch: '获取提示词',
       promptRefreshing: '读取中…',
       promptCopy: '复制全文',
       promptCopied: '已复制',
       promptStats: (sections, chars) => `${sections} 段 · ${chars} 字符`,
-      promptEmpty: '没有读到提示词（宿主未注册系统提示词服务）。',
-      aboutHint: 'DeepSeek Harness 原生省 Token 插件：命令输出过滤、结构压缩、检索式读取、散文整理、对话改写、提示词查看。纯 JS，无外部二进制、无额外服务。',
+      promptEmpty: '没读到提示词（宿主没提供系统提示词服务）。',
+      aboutHint: '省 Token 插件：过滤命令输出、压缩结构、检索式读取、整理散文、改写对话、查看提示词。纯 JS，不依赖任何外部程序。',
       aboutOpen: '★ 打开 GitHub 仓库',
       aboutLicense: 'MIT 许可 · 版本来自 package.json',
       advanced: '高级配置',
-      advancedHint: '数字与枚举项改完点「保存配置」；开关立即生效。',
+      advancedHint: '数字和选项改完点「保存配置」；开关一拨就生效。',
       saveConfig: '保存配置',
       enabled: '启用插件',
-      enabledHint: '关闭后所有变换停止，设置保留。',
+      enabledHint: '关掉后什么都不改，设置留着。',
       recovery: '超预算处理',
-      recoveryHint: 'spill 保存全文并给取回标记；rerun 提示重跑；none 不截断。',
+      recoveryHint: 'spill 存下全文并留个取回标记；rerun 提示重跑；none 不截断。',
       recoveryOptions: {
         spill: 'spill（保存全文）',
         rerun: 'rerun（提示重跑）',
@@ -598,22 +598,22 @@ window.__ModuleLoader__.load({
       },
       nothingToRead: '没有读到当前生效的系统提示词（服务端未返回内容）。',
       modes: {
-        pytest: ['pytest 结果', '通过时只留一行结论；失败时保留 FAILED、断言与摘要'],
-        git: ['git 输出', 'status 干净时折叠成一行，diff 只留文件头和变更行'],
-        tsc: ['tsc 输出', '只保留 error TS 开头的行与总数，告警丢弃'],
-        packageManager: ['包管理器安装', '成功时只留摘要行，失败时只留错误行'],
-        generic: ['通用清理', '任意命令都安全：ANSI、回车重绘、重复行、进度条'],
-        rtk: ['RTK 风格压缩', '命令过滤器未命中时，再按结构压缩 git、构建、eslint、cargo/go 测试、grep/find/ls/tree 等'],
-        readOutline: ['大文件大纲', '超过行数阈值且没给 offset/limit 的 read 只返回符号大纲'],
-        grepCap: ['搜索结果截断', '匹配过多时只留前 N 条并说明剩余数量'],
-        proseStrip: ['标点整理', '段首标点删去；挨着的两个标点只留一个（逗号+句号留句号）；句末连续的 . ， 。 ， 删掉；省略号不动'],
+        pytest: ['pytest 结果', '通过只留一行结论；失败保留 FAILED、断言和摘要'],
+        git: ['git 输出', 'status 干净就收成一行，diff 只留文件头和改动行'],
+        tsc: ['tsc 输出', '只留 error TS 开头的行和总数，警告丢掉'],
+        packageManager: ['包管理器安装', '成功只留摘要行，失败只留错误行'],
+        generic: ['通用清理', '任何命令都适用：ANSI、回车重绘、重复行、进度条'],
+        rtk: ['RTK 风格压缩', '命令过滤器没命中时，再按结构压缩 git、构建、eslint、cargo/go 测试、grep/find/ls/tree 这些'],
+        readOutline: ['大文件大纲', '超过行数阈值、又没给 offset/limit 的 read 只返回符号大纲'],
+        grepCap: ['搜索结果截断', '匹配太多时只留前 N 条，并说明还剩下多少'],
+        proseStrip: ['标点整理', '段首标点删掉；相邻两个标点只留一个（逗号+句号留句号）；句末连续的 . ， 。 删掉；省略号不动'],
       },
       file: '配置目录',
       none: '未找到配置目录，改动不会落盘',
       generated: '更新时间',
-      note: 'Token 数按 Harness 显示上下文时的同一套估算口径（4 字符 ≈ 1 token）折算；只统计被移除的字符。',
+      note: 'Token 数按 Harness 显示上下文时同一套算法折算（4 字符 ≈ 1 token），只算被删掉的部分。',
       preset: '压缩力度',
-      presetHint: '一键设置字符上限与最小改写阈值；想精调再展开下面「高级数字」。',
+      presetHint: '一键设好字符上限和最小改写阈值；想细调再展开下面的「高级数字」。',
       presets: {
         gentle: '省着压（留更多内容）',
         default: '默认',
@@ -622,8 +622,11 @@ window.__ModuleLoader__.load({
       },
       presetApply: '应用',
       rawSettings: '高级数字（原始配置）',
-      words: '规则：词语删除 / 替换',
-      wordsHint: '每行一条规则：左边的词在散文行里被删掉，右边非空则替换成它。内置规则含「谢谢 / 请 / please / thanks」以及「啊 / 呀 / 吧 / 呢 / 嘛 / 哦」等语气词——语气词只在句尾或标点前删，所以「酒吧」「网吧」「毛呢」不会被拆。代码、URL、路径、版本号不参与。',
+      words: '自定义词表',
+      wordsHint: '每行一个词：右边留空就删除，填上内容就替换。语气词也在这张表里；只在句尾或标点前处理，所以「酒吧」「网吧」「毛呢」不会被拆。含 URL、路径或代码的整行不动。',
+      keepWholeLine: '整行只有这个词时保留',
+      keepWholeLineHint: '勾上后，单独的「好的。」不会被删或替换；放在句子里仍会处理。',
+      emptyWords: '词表为空，不做词语删除或替换。',
       wordLabel: '词',
       replaceLabel: '替换为空 = 删除',
       addWord: '加一个词',
@@ -1022,7 +1025,10 @@ window.__ModuleLoader__.load({
           const words = (wordsDraft ?? [])
             .filter((entry) => entry.word !== '')
             .map((entry) => (entry.replace !== '' ? { word: entry.word, replace: entry.replace } : { word: entry.word }));
-          const body = await postState({ config: { prose: { politenessWords: words } } });
+          const body = await postState({ config: { prose: {
+            politenessWords: words,
+            keepWholeLine: cfgGet('prose.keepWholeLine') !== false,
+          } } });
           const saved = body?.config?.prose?.politenessWords;
           if (Array.isArray(saved)) setWordsDraft(saved.map((entry) => ({ word: entry.word, replace: entry.replace ?? '' })));
         } catch (failure) {
@@ -1240,7 +1246,7 @@ window.__ModuleLoader__.load({
             h('span', { style: { fontSize: '12px', fontWeight: 600 } }, text.words),
             h('span', { style: { fontSize: '10px', color: 'var(--dsw-alias-label-secondary)' } }, text.wordsHint)),
           (wordsDraft ?? []).length === 0
-            ? h('div', { style: { fontSize: '11px', color: 'var(--dsw-alias-label-secondary)', margin: '6px 0' } }, text.emptySegments)
+            ? h('div', { style: { fontSize: '11px', color: 'var(--dsw-alias-label-secondary)', margin: '6px 0' } }, text.emptyWords)
             : h('div', { style: { display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '6px' } },
               (wordsDraft ?? []).map((entry, index) => h('div', {
                 key: index,
@@ -1275,9 +1281,21 @@ window.__ModuleLoader__.load({
                   },
                 }, '×'),
               ))),
+          h('label', { style: { display: 'flex', alignItems: 'flex-start', gap: '6px', marginTop: '8px', fontSize: '11px', color: 'var(--dsw-alias-label-secondary)', cursor: busy === 'words' ? 'default' : 'pointer' } },
+            h('input', {
+              type: 'checkbox',
+              checked: cfgGet('prose.keepWholeLine') !== false,
+              disabled: busy === 'words',
+              onChange: (event) => cfgSet('prose.keepWholeLine', event.target.checked),
+            }),
+            h('span', null,
+              h('span', { style: { color: 'var(--dsw-alias-label-primary)' } }, text.keepWholeLine),
+              h('span', { style: { display: 'block', marginTop: '2px' } }, text.keepWholeLineHint),
+            ),
+          ),
           h('div', { style: { display: 'flex', gap: '8px', marginTop: '6px', flexWrap: 'wrap' } },
             button(text.addWord, addWordRow, busy === 'words'),
-            button(text.saveWords, saveWords, busy === 'words' || (wordsDraft ?? []).every((entry) => entry.word === '' && entry.replace === '')),
+            button(text.saveWords, saveWords, busy === 'words'),
           ),
         ),
         h('div', {

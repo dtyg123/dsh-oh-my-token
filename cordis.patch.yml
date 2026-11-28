@@ -48,12 +48,14 @@
           # scope: filtered (only prose outputs such as git log) | all | off.
           stripTrailingPeriod: true
           # Word delete/replace: each entry is { word, replace? }; empty or
-          # omitted replace deletes the word, a string replaces it. The
-          # built-in list (谢谢 / 请 / please / thanks, … plus the speech
-          # particles 啊 / 呀 / 吧 / 呢 / 嘛 / 哦, … — deleted only at a phrase
-          # end, so 酒吧 / 网吧 / 毛呢 / 哗啦 survive) applies when this key is
-          # absent.
+          # omitted replace deletes the word, a string replaces it. The built-in
+          # list is shown in Settings and includes 谢谢 / 好的 / 请 / please /
+          # thanks and speech particles such as 啊 / 呀 / 吧 / 呢. Particles are
+          # deleted only at a phrase end, so 酒吧 / 网吧 / 毛呢 / 哗啦 survive.
+          # When keepWholeLine is true, a line made up of one listed word is kept.
+          # URLs, paths, links and code-like lines are never rewritten.
           # stripPoliteness: true
+          keepWholeLine: true
           # politenessWords:
           #   - word: 谢谢
           #   - word: 请

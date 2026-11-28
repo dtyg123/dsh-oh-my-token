@@ -57,7 +57,7 @@ To change a budget, add the field under that row in the profile's `cordis.patch.
 - A plain-language compression-strength pick (gentle / default / aggressive) that sets the budgets and min-rewrite thresholds in one click, with the raw numbers still available under "advanced";
 - Advanced: budgets, `minChars`/`minGain`, retrieval thresholds, over-budget recovery (`spill`/`rerun`/`none`), `logEvery`, and the plugin master switch;
 - A three-way scope shared by the prose transforms (punctuation / words) (`off` / prose outputs only / all prose);
-- The word table (rules) editor: one row per word with an optional replacement (empty = delete), saved as `prose.politenessWords`; the built-in rules cover politeness words and speech particles (啊 / 呀 / 吧 / 呢 / 嘛 / 哦…), and a particle is only dropped at the end of a phrase so 酒吧 / 网吧 / 毛呢 / 哗啦 stay intact;
+- A custom word table: one row per word with an optional replacement (empty = delete), saved as `prose.politenessWords`; particles live in the same table. The defaults include 谢谢 / 好的 / 请 / please / thanks and particles such as 啊 / 呀 / 吧 / 呢 / 嘛 / 哦. Particles are only dropped at the end of a phrase, so 酒吧 / 网吧 / 毛呢 / 哗啦 stay intact. The table also has a “keep a line made up of one word” option;
 - Each message of the live turn has a 改写 button in the chat; it matches on the message text, so it needs no session knowledge and works right after a restart;
 - The savings record: all time, tokens and characters removed, the saved share, a per-tool table, and a message/reply strip count;
 - The profile directory the choice is written to, so you can see whether a switch actually persisted.
@@ -93,7 +93,8 @@ The 完整提示词 card in Settings → 省 Token is **read-only**, not an edit
 | `retrieval.maxGrepMatches` | `50` | |
 | `prose.stripTrailingPeriod` | `true` | Tidy punctuation: drop a mark opening a paragraph; collapse two stuck-together marks to one (a comma and a period keep the period, same-strength keeps the right one); then drop the run of trailing `.` / `。` / `,` / `，` (an ASCII ellipsis is kept). |
 | `prose.stripPoliteness` | `true` | Delete or replace words on prose lines via the `politenessWords` table. |
-| `prose.politenessWords` | built-in rules + particles | Each entry is `{ word, replace? }`: empty/omitted `replace` deletes the word, a string replaces it. Unset = the built-in rules (谢谢 / 请 / please / thanks, … plus particles 啊 / 呀 / 吧 / 呢 / 嘛 / 哦, …, deleted only at a phrase end and guarded against splitting 酒吧 / 网吧 / 毛呢 / 哗啦); an explicit empty list turns the word step off. |
+| `prose.keepWholeLine` | `true` | Keep a line made up of one listed word (with optional sentence-ending punctuation); only tidy its punctuation. Turn it off to apply deletion/replacement normally. |
+| `prose.politenessWords` | built-in rules | Each entry is `{ word, replace? }`: empty/omitted `replace` deletes the word, a string replaces it. The defaults include 谢谢 / 好的 / 请 / please / thanks and particles 啊 / 呀 / 吧 / 呢 / 嘛 / 哦, deleted only at a phrase end and guarded against splitting compounds. An explicit empty list turns the word step off. Lines containing URLs, paths, Markdown links or code are left alone. |
 | `prose.scope` | `filtered` | `filtered` = only output a command filter marked as prose (e.g. `git log`); `all`; `off`. |
 | `recovery` | `spill` | `spill` \| `rerun` \| `none`. |
 | `logEvery` | `0` | Log a savings line every N rewritten results; `0` is quiet. |
@@ -104,9 +105,9 @@ An unknown field is an error at activation, not a silent no-op. Every field abov
 
 Deleting a period from a filename, a URL, a version or a line of code corrupts data to save one token. `isProseLine` therefore refuses:
 
-- fenced code, diff lines, lines starting with `{ [ <`, lines ending in `;{}=`, and lines carrying code punctuation (`= ( ) ; { } [ ]`) that end in a comma;
-- assignment/statement lines (containing `= ; { }` or starting with `const`/`function`/`import`), which politeness removal never touches;
-- anything containing a URL, an email address, a path with an extension;
+- fenced or inline code, diff lines, lines starting with `{ [ <`, lines ending in `;{}=`, and lines carrying code punctuation (`= ( ) ; { } [ ]`) that end in a comma;
+- assignment/statement lines (containing `= ; { }` or starting with `const`/`function`/`import`), which word removal never touches;
+- lines containing URLs, email addresses, Markdown links or paths, which word removal never touches;
 - anything that looks like a version (`2.2.0`) or `host:port`;
 - list items (`- `, `* `), ellipses, and `e.g.` / `i.e.`.
 

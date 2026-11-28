@@ -272,6 +272,7 @@ export function apply(ctx, config) {
   const liveHistoryOptions = () => ({
     punctuation: state.modes.proseStrip !== false,
     politeness: policy.prose?.stripPoliteness !== false,
+    keepWholeLine: policy.prose?.keepWholeLine !== false,
     rtk: state.modes.rtk !== false,
     words: policy.prose?.politenessWords,
     edits: editsMap,
@@ -344,6 +345,7 @@ export function apply(ctx, config) {
     const messages = stripClaimedMessages(decision.messages, payload?.messages, countStrip, {
       punctuation: wantPunctuation,
       politeness: wantPoliteness,
+      keepWholeLine: policy.prose?.keepWholeLine !== false,
       words: policy.prose?.politenessWords,
       edits: editsMap.size > 0 ? editsMap : undefined,
       editsByText: editsByText.size > 0 ? editsByText : undefined,
@@ -363,6 +365,7 @@ export function apply(ctx, config) {
     return stripAssistantStream(stream, countStrip, {
       punctuation,
       politeness,
+      keepWholeLine: policy.prose?.keepWholeLine !== false,
       words: policy.prose?.politenessWords,
       onProse: (before, after) => recordProseNote('assistant reply', before, after),
     });

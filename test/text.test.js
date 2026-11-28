@@ -86,7 +86,7 @@ test('a custom word list replaces instead of deleting', () => {
 
 test('automatic word replacement runs before punctuation tidy', () => {
   assert.equal(
-    stripTrailingPeriods('请', { words: [{ word: '请', replace: '谢谢。' }] }),
+    stripTrailingPeriods('请', { words: [{ word: '请', replace: '谢谢。' }], keepWholeLine: false }),
     '谢谢',
   );
 });
@@ -129,7 +129,8 @@ test('the word step is a byte-identical no-op when nothing matches', () => {
 });
 
 test('built-in particles are deleted only at a phrase boundary', () => {
-  assert.equal(stripTrailingPeriods('好的呀。'), '好的');
+  assert.equal(stripTrailingPeriods('好的。'), '好的', 'a line made up of one configured word is kept');
+  assert.equal(stripTrailingPeriods('好的呀。'), '', 'words in a phrase are still removed');
   assert.equal(stripTrailingPeriods('走吧！'), '走！');
   assert.equal(stripTrailingPeriods('真的嘛，那行。'), '真的，那行');
   // A particle inside a word keeps the word intact.
@@ -139,6 +140,27 @@ test('built-in particles are deleted only at a phrase boundary', () => {
   assert.equal(stripTrailingPeriods('哗啦。'), '哗啦');
   // Interjections that open a sentence go with their comma.
   assert.equal(stripTrailingPeriods('哎呀，算了。'), '算了');
+});
+
+test('custom words keep a whole-line match when configured', () => {
+  const words = [{ word: '保留', replace: 'changed' }];
+  assert.equal(stripTrailingPeriods('保留。', { words }), '保留');
+  assert.equal(stripTrailingPeriods('保留。', { words, keepWholeLine: false }), 'changed');
+  assert.equal(stripTrailingPeriods('请保留。', { words }), '请changed');
+});
+
+test('custom word rules never rewrite URL, path or link lines', () => {
+  const words = [{ word: 'token', replace: '' }];
+  for (const line of [
+    'https://example.com/token.',
+    'www.example.com/token.',
+    '[token](https://example.com/token).',
+    'run `token` after this step.',
+    'C:\\work\\token\\file.txt.',
+    './token/file.txt.',
+  ]) {
+    assert.equal(stripTrailingPeriods(line, { words }), line);
+  }
 });
 
 test('a changed line is recorded as a word diff', () => {

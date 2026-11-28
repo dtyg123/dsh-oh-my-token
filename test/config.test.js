@@ -38,7 +38,7 @@ test('RTK compaction is on by default and can be switched off', () => {
 
 test('the default prose word list carries politeness words and particles', () => {
   const words = resolveConfig({}).prose.politenessWords.map((entry) => entry.word);
-  for (const word of ['谢谢', '多谢', '感谢', '请问', '麻烦您', '麻烦', '劳驾', '拜托', '辛苦', '请', 'please', 'thanks', 'thank you', 'kindly']) {
+  for (const word of ['谢谢', '好的', '多谢', '感谢', '请问', '麻烦您', '麻烦', '劳驾', '拜托', '辛苦', '请', 'please', 'thanks', 'thank you', 'kindly']) {
     assert.ok(words.includes(word), word);
   }
   for (const particle of ['啊', '呀', '吧', '呢', '嘛', '哦']) {
@@ -56,4 +56,5 @@ test('a custom politeness word list is validated', () => {
   assert.throws(() => resolveConfig({ prose: { politenessWords: [{ word: 'a', bogus: 1 }] } }), /only set "word" and "replace"/);
   // An empty list is valid: it turns the word step off.
   assert.deepEqual(resolveConfig({ prose: { politenessWords: [] } }).prose.politenessWords, []);
+  assert.equal(resolveConfig({ prose: { keepWholeLine: false } }).prose.keepWholeLine, false);
 });
