@@ -516,6 +516,13 @@ window.__ModuleLoader__.load({
       nav: '省 Token',
       title: '省 Token 管理',
       subtitle: '在工具结果写入会话之前决定它进多少。只在这一处改写，历史保持追加，前缀缓存不受影响。',
+      tabs: {
+        overview: '概览',
+        compression: '压缩',
+        prose: '散文',
+        chat: '对话',
+        prompt: '提示词',
+      },
       failed: '无法连接插件',
       refresh: '刷新',
       reset: '清除历史累计',
@@ -856,6 +863,7 @@ window.__ModuleLoader__.load({
       const text = TEXT;
       const [state, setState] = React.useState(null);
       const [error, setError] = React.useState('');
+      const [tab, setTab] = React.useState('overview');
       const [busy, setBusy] = React.useState('');
       const [confirming, setConfirming] = React.useState(false);
       const [prompt, setPrompt] = React.useState(null);
@@ -1153,6 +1161,15 @@ window.__ModuleLoader__.load({
           }))),
       );
 
+      /**
+       * One tab's content. `display: contents` keeps the cards as direct
+       * children of the column, so the gap stays even; an inactive tab is
+       * hidden without unmounting what the drafts are attached to.
+       */
+      const pane = (id, children) => h('div', {
+        style: { display: tab === id ? 'contents' : 'none' },
+      }, children);
+
       return h('div', {
         style: {
           display: 'flex', flexDirection: 'column', gap: '12px',
@@ -1166,6 +1183,22 @@ window.__ModuleLoader__.load({
           style: { marginTop: '2px', fontSize: '11px', lineHeight: '16px', color: 'var(--dsw-alias-label-secondary)' },
         }, text.subtitle),
       ),
+      h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '2px', padding: '3px', borderRadius: '9px', border: '1px solid var(--dsw-alias-border-l1)', background: 'var(--dsw-alias-bg-layer-1)' } },
+        Object.entries(text.tabs).map(([id, label]) => h('button', {
+          key: id,
+          type: 'button',
+          role: 'tab',
+          'aria-selected': tab === id ? 'true' : 'false',
+          'data-tab': id,
+          onClick: () => setTab(id),
+          style: {
+            padding: '4px 11px', borderRadius: '7px', font: 'inherit', fontSize: '12px', lineHeight: '18px',
+            border: `1px solid ${tab === id ? 'var(--dsw-alias-brand-primary)' : 'transparent'}`,
+            background: tab === id ? 'var(--dsw-alias-bg-layer-2)' : 'transparent',
+            color: tab === id ? 'var(--dsw-alias-label-primary)' : 'var(--dsw-alias-label-secondary)',
+            cursor: 'pointer',
+          },
+        }, label))),
       error !== '' ? h('div', {
         style: {
           padding: '6px 9px', borderRadius: '6px', fontSize: '11px',
@@ -1173,6 +1206,7 @@ window.__ModuleLoader__.load({
           border: '1px solid var(--dsw-alias-state-error-primary)',
         },
       }, error) : null,
+      pane('overview', [
       h(Card, null,
         h('div', { style: { fontSize: '11px', color: 'var(--dsw-alias-label-secondary)' } }, text.hero),
         h('div', {
@@ -1189,6 +1223,8 @@ window.__ModuleLoader__.load({
         h(ScopeCard, { title: text.session, summary: session, text }),
         h(ScopeCard, { title: text.cumulative, summary: cumulative, text }),
       ),
+      ]),
+      pane('compression', [
       h(Card, null,
         h('div', { style: { display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px' } },
           h('span', { style: { fontSize: '12px', fontWeight: 600 } }, text.advanced),
@@ -1252,6 +1288,8 @@ window.__ModuleLoader__.load({
       ),
       group(text.filters, ['pytest', 'git', 'tsc', 'packageManager', 'generic', 'rtk']),
       group(text.retrieval, ['readOutline', 'grepCap']),
+      ]),
+      pane('prose', [
       h(Card, null,
         h('div', {
           style: { display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px' },
@@ -1342,6 +1380,8 @@ window.__ModuleLoader__.load({
           },
         }, text.proseHint),
       ),
+      ]),
+      pane('chat', [
       h(Card, null,
         h('div', { style: { display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px', marginBottom: '6px' } },
           h('span', { style: { fontSize: '12px', fontWeight: 600 } }, text.editTitle),
@@ -1428,6 +1468,8 @@ window.__ModuleLoader__.load({
           )
           : h('div', { style: { fontSize: '11px', color: 'var(--dsw-alias-label-secondary)' } }, text.notesEmpty),
       ),
+      ]),
+      pane('prompt', [
       h(Card, null,
         h('div', { style: { display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px', marginBottom: '6px' } },
           h('span', { style: { fontSize: '12px', fontWeight: 600 } }, text.prompt),
@@ -1462,6 +1504,8 @@ window.__ModuleLoader__.load({
           },
         }, text.promptHint),
       ),
+      ]),
+      pane('overview', [
       h(Card, null,
         h('div', { style: { fontSize: '12px', fontWeight: 600, marginBottom: '4px' } }, text.byTool),
         tools.length === 0
@@ -1516,6 +1560,7 @@ window.__ModuleLoader__.load({
             : button(text.reset, () => { setConfirming(true); }, busy === 'reset' || state === null),
         ),
       ),
+      ]),
       );
     }
 

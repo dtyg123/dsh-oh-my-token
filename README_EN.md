@@ -53,7 +53,7 @@ To change a budget, add the field under that row in the profile's `cordis.patch.
 
 ## Settings page
 
-**Settings → 省 Token** is the management panel:
+**Settings → 省 Token** is the management panel, split into **Overview / Compression / Prose / Chat / Prompt** tabs instead of one long page:
 
 - One switch per transform (5 command filters, RTK structure compaction, 2 retrieval transforms, the punctuation tidy, the word delete/replace table);
 - A plain-language compression-strength pick (gentle / default / aggressive) that sets the budgets and min-rewrite thresholds in one click, with the raw numbers still available under "advanced";
