@@ -621,13 +621,18 @@ window.__ModuleLoader__.load({
       },
       rawSettings: '高级数字（原始配置）',
       words: '自定义词表',
-      wordsHint: '整行只有该词时始终保留。前/后文保护填写词旁边紧邻的内容；多个备选用 | 分隔，两侧都填时两边都匹配才保护。语气词只在短语末尾匹配。',
+      wordsHint: '整行只有该词时始终保留。前/后文保护可在每条规则的更多设置中添加词块；同侧任一词块命中即可，两侧都设置时必须同时命中。',
       emptyWords: '词表为空，不做词语删除或替换。',
       wordLabel: '词',
       replaceLabel: '替换为空 = 删除',
-      unlessBeforeLabel: '前文保护（紧邻）',
-      unlessAfterLabel: '后文保护（紧邻）',
-      addWord: '加一个词',
+      unlessBeforeLabel: '前文保护词块（紧邻）',
+      unlessAfterLabel: '后文保护词块（紧邻）',
+      contextLabel: '输入词块',
+      addContext: '添加词块',
+      removeContext: '删除词块',
+      moreSettings: '更多设置',
+      removeWord: '删除词条',
+      addWord: '添加词条',
       saveWords: '保存词表',
     };
 
@@ -849,8 +854,8 @@ window.__ModuleLoader__.load({
           setWordsDraft(words.map((entry) => ({
             word: entry.word,
             replace: entry.replace ?? '',
-            unlessBefore: (entry.unlessBefore ?? []).join('|'),
-            unlessAfter: (entry.unlessAfter ?? []).join('|'),
+            unlessBefore: [...(entry.unlessBefore ?? [])],
+            unlessAfter: [...(entry.unlessAfter ?? [])],
           })));
         }
       }, [state, wordsDraft]);
@@ -1018,8 +1023,21 @@ window.__ModuleLoader__.load({
 
       const setWordRow = (index, key, value) => setWordsDraft((rows) =>
         (rows ?? []).map((entry, i) => (i === index ? { ...entry, [key]: value } : entry)));
-      const addWordRow = () => setWordsDraft((rows) => [...(rows ?? []), { word: '', replace: '', unlessBefore: '', unlessAfter: '' }]);
+      const addWordRow = () => setWordsDraft((rows) => [...(rows ?? []), { word: '', replace: '', unlessBefore: [], unlessAfter: [] }]);
       const removeWordRow = (index) => setWordsDraft((rows) => (rows ?? []).filter((_, i) => i !== index));
+      const setWordContext = (index, side, contextIndex, value) => setWordsDraft((rows) =>
+        (rows ?? []).map((entry, i) => i === index ? {
+          ...entry,
+          [side]: entry[side].map((context, j) => j === contextIndex ? value : context),
+        } : entry));
+      const addWordContext = (index, side) => setWordsDraft((rows) =>
+        (rows ?? []).map((entry, i) => i === index && entry[side].length < 40
+          ? { ...entry, [side]: [...entry[side], ''] }
+          : entry));
+      const removeWordContext = (index, side, contextIndex) => setWordsDraft((rows) =>
+        (rows ?? []).map((entry, i) => i === index
+          ? { ...entry, [side]: entry[side].filter((_, j) => j !== contextIndex) }
+          : entry));
 
       /** Persist the word list through the config channel (it is a config field). */
       const saveWords = async () => {
@@ -1031,7 +1049,7 @@ window.__ModuleLoader__.load({
               const rule = { word: entry.word };
               if (entry.replace !== '') rule.replace = entry.replace;
               for (const side of ['unlessBefore', 'unlessAfter']) {
-                const contexts = (entry[side] ?? '').split('|').map((context) => context.trim()).filter(Boolean);
+                const contexts = (entry[side] ?? []).filter((context) => context !== '');
                 if (contexts.length > 0) rule[side] = contexts;
               }
               return rule;
@@ -1043,8 +1061,8 @@ window.__ModuleLoader__.load({
           if (Array.isArray(saved)) setWordsDraft(saved.map((entry) => ({
             word: entry.word,
             replace: entry.replace ?? '',
-            unlessBefore: (entry.unlessBefore ?? []).join('|'),
-            unlessAfter: (entry.unlessAfter ?? []).join('|'),
+            unlessBefore: [...(entry.unlessBefore ?? [])],
+            unlessAfter: [...(entry.unlessAfter ?? [])],
           })));
         } catch (failure) {
           setError(`${text.failed}: ${String(failure?.message ?? failure)}`);
@@ -1078,6 +1096,43 @@ window.__ModuleLoader__.load({
           opacity: disabled === true ? 0.6 : 1,
         },
       }, label);
+
+      const contextEditor = (index, side, label, contexts) => h('div', {
+        key: side,
+        style: { display: 'flex', flexDirection: 'column', gap: '4px' },
+      },
+        h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' } },
+          h('span', { style: { fontSize: '11px', color: 'var(--dsw-alias-label-secondary)' } }, label),
+          button(text.addContext, () => addWordContext(index, side), busy === 'words' || contexts.length >= 40)),
+        contexts.map((context, contextIndex) => h('div', {
+          key: contextIndex,
+          style: { display: 'flex', alignItems: 'center', gap: '6px' },
+        },
+          h('input', {
+            value: context,
+            placeholder: text.contextLabel,
+            maxLength: 40,
+            'aria-label': `${label} ${contextIndex + 1}`,
+            disabled: busy === 'words',
+            onChange: (event) => setWordContext(index, side, contextIndex, event.target.value),
+            style: inputStyle,
+          }),
+          h('button', {
+            type: 'button',
+            'aria-label': text.removeContext,
+            title: text.removeContext,
+            onClick: () => removeWordContext(index, side, contextIndex),
+            disabled: busy === 'words',
+            style: {
+              padding: '2px 6px', borderRadius: '5px', fontSize: '11px',
+              border: '1px solid var(--dsw-alias-border-l1)',
+              background: 'var(--dsw-alias-bg-layer-1)',
+              color: 'var(--dsw-alias-state-error-primary)',
+              cursor: 'pointer',
+            },
+          }, '×'),
+        )),
+      );
 
       const modes = Array.isArray(state?.modes) ? state.modes : [];
       const modeOf = (id) => modes.find((mode) => mode.id === id)?.on === true;
@@ -1265,56 +1320,52 @@ window.__ModuleLoader__.load({
             : h('div', { style: { display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '6px' } },
               (wordsDraft ?? []).map((entry, index) => h('div', {
                 key: index,
-                style: { display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' },
+                style: {
+                  display: 'flex', flexDirection: 'column', gap: '6px',
+                  padding: '8px', border: '1px solid var(--dsw-alias-border-l1)', borderRadius: '8px',
+                },
               },
-                h('input', {
-                  value: entry.word,
-                  placeholder: text.wordLabel,
-                  maxLength: 40,
-                  'aria-label': text.wordLabel,
-                  disabled: busy === 'words',
-                  onChange: (event) => setWordRow(index, 'word', event.target.value),
-                  style: inputStyle,
-                }),
-                h('input', {
-                  value: entry.replace,
-                  placeholder: text.replaceLabel,
-                  maxLength: 60,
-                  'aria-label': text.replaceLabel,
-                  disabled: busy === 'words',
-                  onChange: (event) => setWordRow(index, 'replace', event.target.value),
-                  style: inputStyle,
-                }),
-                h('input', {
-                  value: entry.unlessBefore ?? '',
-                  placeholder: text.unlessBeforeLabel,
-                  maxLength: 1700,
-                  'aria-label': text.unlessBeforeLabel,
-                  disabled: busy === 'words',
-                  onChange: (event) => setWordRow(index, 'unlessBefore', event.target.value),
-                  style: inputStyle,
-                }),
-                h('input', {
-                  value: entry.unlessAfter ?? '',
-                  placeholder: text.unlessAfterLabel,
-                  maxLength: 1700,
-                  'aria-label': text.unlessAfterLabel,
-                  disabled: busy === 'words',
-                  onChange: (event) => setWordRow(index, 'unlessAfter', event.target.value),
-                  style: inputStyle,
-                }),
-                h('button', {
-                  type: 'button',
-                  onClick: () => removeWordRow(index),
-                  disabled: busy === 'words',
-                  style: {
-                    padding: '2px 6px', borderRadius: '5px', fontSize: '11px',
-                    border: '1px solid var(--dsw-alias-border-l1)',
-                    background: 'var(--dsw-alias-bg-layer-1)',
-                    color: 'var(--dsw-alias-state-error-primary)',
-                    cursor: 'pointer',
-                  },
-                }, '×'),
+                h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' } },
+                  h('input', {
+                    value: entry.word,
+                    placeholder: text.wordLabel,
+                    maxLength: 40,
+                    'aria-label': text.wordLabel,
+                    disabled: busy === 'words',
+                    onChange: (event) => setWordRow(index, 'word', event.target.value),
+                    style: inputStyle,
+                  }),
+                  h('input', {
+                    value: entry.replace,
+                    placeholder: text.replaceLabel,
+                    maxLength: 60,
+                    'aria-label': text.replaceLabel,
+                    disabled: busy === 'words',
+                    onChange: (event) => setWordRow(index, 'replace', event.target.value),
+                    style: inputStyle,
+                  }),
+                  h('button', {
+                    type: 'button',
+                    'aria-label': text.removeWord,
+                    title: text.removeWord,
+                    onClick: () => removeWordRow(index),
+                    disabled: busy === 'words',
+                    style: {
+                      padding: '2px 6px', borderRadius: '5px', fontSize: '11px',
+                      border: '1px solid var(--dsw-alias-border-l1)',
+                      background: 'var(--dsw-alias-bg-layer-1)',
+                      color: 'var(--dsw-alias-state-error-primary)',
+                      cursor: 'pointer',
+                    },
+                  }, '×'),
+                ),
+                h('details', { style: { fontSize: '11px' } },
+                  h('summary', { style: { cursor: 'pointer', color: 'var(--dsw-alias-label-secondary)' } }, text.moreSettings),
+                  h('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' } },
+                    contextEditor(index, 'unlessBefore', text.unlessBeforeLabel, entry.unlessBefore),
+                    contextEditor(index, 'unlessAfter', text.unlessAfterLabel, entry.unlessAfter),
+                  ),
+                ),
               ))),
           h('div', { style: { display: 'flex', gap: '8px', marginTop: '6px', flexWrap: 'wrap' } },
             button(text.addWord, addWordRow, busy === 'words'),
