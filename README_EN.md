@@ -53,7 +53,7 @@ To change a budget, add the field under that row in the profile's `cordis.patch.
 
 ## Settings page
 
-**Settings → 省 Token** is the management panel, split into **Overview / Compression / Prose / Chat / Prompt** tabs instead of one long page:
+**Settings → 省 Token** is the management panel, split into **Overview / Compression / Prose / Chat / Prompt / About** tabs instead of one long page (About shows the plugin name, the version read from `package.json`, and a button that opens the GitHub repository):
 
 - One switch per transform (5 command filters, RTK structure compaction, 2 retrieval transforms, the punctuation tidy);
 - A plain-language compression-strength pick (gentle / default / aggressive) that sets the budgets and min-rewrite thresholds in one click, with the raw numbers still available under "advanced";
