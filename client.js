@@ -527,7 +527,6 @@ window.__ModuleLoader__.load({
         overview: '概览',
         compression: '压缩',
         prose: '散文',
-        chat: '对话',
         prompt: '提示词',
         about: '关于',
       },
@@ -630,19 +629,6 @@ window.__ModuleLoader__.load({
       replaceLabel: '替换为空 = 删除',
       addWord: '加一个词',
       saveWords: '保存词表',
-      editTitle: '对话内容编辑',
-      editHint: '改写最近消息的内容。你的改写只在下次请求发给模型，磁盘上的历史原样不动。',
-      roleUser: '你',
-      roleAssistant: '模型',
-      editNow: '编辑',
-      editSaving: '保存改写',
-      editRestore: '恢复原内容',
-      editCancel: '取消',
-      editEmpty: '还没有可编辑的消息，对话几句后这里会列出最近的内容。',
-      notes: '自动变换记录',
-      notesHint: '最近自动删改的原文：红字划线 = 删掉，绿字 = 替换或新增。',
-      notesEmpty: '还没有变换记录。',
-      notesAgo: (seconds) => (seconds < 60 ? `${seconds} 秒前` : `${Math.floor(seconds / 60)} 分钟前`),
     };
 
     /** A finite, non-negative number from any wire value. */
@@ -769,49 +755,6 @@ window.__ModuleLoader__.load({
       );
     }
 
-    /**
-     * One recorded change, shown the way a Git diff shows a changed line:
-     * removed text struck through in red, added text in green.
-     */
-    function DiffLine(props) {
-      const { segments, notes } = props;
-      if (!Array.isArray(segments) || segments.length === 0) {
-        return h('div', { style: { fontSize: '11px', color: 'var(--dsw-alias-label-secondary)' } },
-          Array.isArray(notes) ? notes.join('、') : '');
-      }
-      return h('div', {
-        style: {
-          fontSize: '12px', lineHeight: '18px', fontFamily: 'inherit',
-          overflowWrap: 'anywhere', whiteSpace: 'pre-wrap',
-          maxHeight: '76px', overflowY: 'auto',
-        },
-      }, segments.map((segment, index) => {
-        if (segment?.kind === 'del') {
-          return h('span', {
-            key: index,
-            style: {
-              color: 'var(--dsw-alias-state-error-primary)',
-              textDecoration: 'line-through',
-              background: 'rgba(239, 68, 68, 0.18)',
-              borderRadius: '3px',
-            },
-          }, String(segment.text));
-        }
-        if (segment?.kind === 'add') {
-          return h('span', {
-            key: index,
-            style: {
-              color: 'var(--dsw-alias-state-success-primary)',
-              fontWeight: 600,
-              background: 'rgba(34, 197, 94, 0.2)',
-              borderRadius: '3px',
-            },
-          }, String(segment.text));
-        }
-        return h('span', { key: index, style: { color: 'var(--dsw-alias-label-primary)' } }, String(segment?.text ?? ''));
-      }));
-    }
-
     /** A share bar for the saved ratio. */
     function Bar(props) {      const ratio = Math.min(1, number(props.ratio));
       return h('div', {
@@ -881,9 +824,6 @@ window.__ModuleLoader__.load({
       const [promptCopied, setPromptCopied] = React.useState(false);
       const [cfgDraft, setCfgDraft] = React.useState(null);
       const [wordsDraft, setWordsDraft] = React.useState(null);
-      const [editItems, setEditItems] = React.useState(null);
-      const [editDraft, setEditDraft] = React.useState({});
-      const [editBusy, setEditBusy] = React.useState('');
 
       const load = React.useCallback(async () => {
         try {
@@ -909,17 +849,6 @@ window.__ModuleLoader__.load({
           setWordsDraft(words.map((entry) => ({ word: entry.word, replace: entry.replace ?? '' })));
         }
       }, [state, wordsDraft]);
-      /** Load the editable conversation messages. */
-      const loadEdits = React.useCallback(async () => {
-        try {
-          const response = await fetch(EDIT_ENDPOINT, { headers: { accept: 'application/json' } });
-          if (!response.ok) return;
-          setEditItems(response.json ? (await response.json()).items : []);
-        } catch {
-          /* the page still works when the route is absent (older host) */
-        }
-      }, []);
-      React.useEffect(() => { loadEdits(); }, [loadEdits]);
       React.useEffect(() => {
         const timer = setInterval(() => { load(); }, 5000);
         return () => { clearInterval(timer); };
@@ -1102,31 +1031,6 @@ window.__ModuleLoader__.load({
           setError(`${text.failed}: ${String(failure?.message ?? failure)}`);
         } finally {
           setBusy('');
-        }
-      };
-
-      /** Save one conversation edit (or restore it with a null text). */
-      const commitEdit = async (id, value) => {
-        setEditBusy(id);
-        try {
-          const response = await fetch(EDIT_ENDPOINT, {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ items: [{ id, text: value }] }),
-          });
-          if (!response.ok) throw new Error(`HTTP ${response.status}`);
-          const body = await response.json();
-          setEditItems(body.items);
-          setEditDraft((draft) => {
-            const next = { ...draft };
-            delete next[id];
-            return next;
-          });
-          setError('');
-        } catch (failure) {
-          setError(`${text.failed}: ${String(failure?.message ?? failure)}`);
-        } finally {
-          setEditBusy('');
         }
       };
 
@@ -1386,94 +1290,6 @@ window.__ModuleLoader__.load({
             color: 'var(--dsw-alias-label-secondary)',
           },
         }, text.proseHint),
-      ),
-      ]),
-      pane('chat', [
-      h(Card, null,
-        h('div', { style: { display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px', marginBottom: '6px' } },
-          h('span', { style: { fontSize: '12px', fontWeight: 600 } }, text.editTitle),
-          h('span', { style: { fontSize: '10px', color: 'var(--dsw-alias-label-secondary)' } }, text.editHint)),
-        editItems === null || editItems.length === 0
-          ? h('div', { style: { fontSize: '11px', lineHeight: '16px', color: 'var(--dsw-alias-label-secondary)' } }, text.editEmpty)
-          : h('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px' } },
-            editItems.map((item) => {
-              const drafting = editDraft[item.id] !== undefined;
-              return h('div', {
-                key: item.id,
-                style: {
-                  padding: '7px 9px', borderRadius: '8px',
-                  border: item.edited ? '1px solid var(--dsw-alias-brand-primary)' : '1px solid var(--dsw-alias-border-l1)',
-                  background: 'var(--dsw-alias-bg-layer-1)',
-                },
-              },
-                h('div', { style: { display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' } },
-                  h('span', {
-                    style: {
-                      fontSize: '10px', padding: '1px 6px', borderRadius: '999px',
-                      border: '1px solid var(--dsw-alias-border-l1)',
-                      color: item.role === 'user' ? 'var(--dsw-alias-label-primary)' : 'var(--dsw-alias-label-secondary)',
-                    },
-                  }, item.role === 'user' ? text.roleUser : text.roleAssistant),
-                  item.edited ? h('span', { style: { fontSize: '10px', color: 'var(--dsw-alias-state-success-primary)' } }, '· edited') : null,
-                  h('div', { style: { flex: '1 1 auto', minWidth: 0 } }),
-                  !drafting ? button(text.editNow, () => setEditDraft((draft) => ({ ...draft, [item.id]: item.text })), false) : null,
-                ),
-                drafting
-                  ? h('textarea', {
-                    value: editDraft[item.id],
-                    maxLength: 20000,
-                    rows: 3,
-                    onChange: (event) => setEditDraft((draft) => ({ ...draft, [item.id]: event.target.value })),
-                    style: {
-                      ...inputStyle, width: '100%', resize: 'vertical', flex: '1 1 auto',
-                    },
-                  })
-                  : h('div', {
-                    style: {
-                      fontSize: '11px', lineHeight: '16px', color: 'var(--dsw-alias-label-secondary)',
-                      whiteSpace: 'pre-wrap', overflowWrap: 'anywhere',
-                    },
-                  }, item.text),
-                h('div', { style: { display: 'flex', gap: '6px', marginTop: '6px' } },
-                  drafting
-                    ? button(text.editSaving, () => { commitEdit(item.id, editDraft[item.id].trim() === '' ? null : editDraft[item.id]); }, editBusy === item.id)
-                    : null,
-                  drafting
-                    ? button(text.editCancel, () => setEditDraft((draft) => { const next = { ...draft }; delete next[item.id]; return next; }), editBusy === item.id)
-                    : null,
-                  item.edited && !drafting
-                    ? button(text.editRestore, () => commitEdit(item.id, null), editBusy === item.id)
-                    : null),
-              );
-            }),
-          ),
-      ),
-      h(Card, null,
-        h('div', { style: { display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px', marginBottom: '6px' } },
-          h('span', { style: { fontSize: '12px', fontWeight: 600 } }, text.notes),
-          h('span', { style: { fontSize: '10px', color: 'var(--dsw-alias-label-secondary)' } }, text.notesHint)),
-        (Array.isArray(state?.recent) && state.recent.length > 0)
-          ? h('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px' } },
-            state.recent.slice(0, 20).map((entry, index) => h('div', {
-              key: index,
-              style: {
-                padding: '5px 8px', borderRadius: '6px', minWidth: 0,
-                border: '1px solid var(--dsw-alias-border-l1)',
-                background: 'var(--dsw-alias-bg-layer-1)',
-              },
-            },
-            h('div', {
-              style: {
-                display: 'flex', gap: '8px', fontSize: '10px', lineHeight: '14px',
-                marginBottom: '2px', color: 'var(--dsw-alias-label-secondary)',
-              },
-            },
-            h('span', { style: { fontWeight: 600, color: 'var(--dsw-alias-label-primary)' } }, entry.label),
-            h('span', null, text.notesAgo(Math.max(0, (Date.now() - entry.at) / 1000)))),
-            h(DiffLine, { segments: entry.diff, notes: entry.notes }),
-            )),
-          )
-          : h('div', { style: { fontSize: '11px', color: 'var(--dsw-alias-label-secondary)' } }, text.notesEmpty),
       ),
       ]),
       pane('prompt', [

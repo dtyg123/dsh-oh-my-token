@@ -15,11 +15,9 @@ It internalises two ideas rather than bundling two tools:
 
 Plus two transformations the model never needs to read (independently switchable): on a line that is provably prose, a configurable word table deletes or replaces words (`谢谢`, `请`, `please`, `thanks`, … — delete by default, or swap one word for another), and punctuation is tidied: a mark opening a paragraph is dropped, two stuck-together marks collapse to one (a comma and a period keep the period; the same strength rule applies to the rest), and the run of **sentence-final** `.`, `。`, `,` and `，` marks is removed (an ASCII ellipsis is kept). They apply to tool output, your own typed messages, the assistant's replies, and past turns — the last of these is stripped while the request is assembled, so the model never sees those bytes while the stored session files stay byte-for-byte unchanged.
 
-Plus two extras on the same derived path:
+Plus one extra on the same derived path:
 
-- **Conversation editing** — rewrite any recent message from the settings page. The rewrite is only carried in the next request; it is never written to the durable log, and "restore" puts the original back.
 - **Red lines in the chat** — in your own messages and in the **body** of the model's replies, every word the plugin drops is drawn where it was: struck through in red, a replacement in green. Your messages use the harness's text-rule hook; a reply body is harness-rendered Markdown with no text hook, so the plugin puts the removed words back into the finished DOM (a re-render is decorated again).
-- **Transform record** — the settings page expands each recent prose change as a diff: removed words struck through in red, replaced or new text in green, the way a changed file reads on GitHub. The record is written to the profile directory, so it survives a restart.
 
 ## What it keeps
 
@@ -53,15 +51,14 @@ To change a budget, add the field under that row in the profile's `cordis.patch.
 
 ## Settings page
 
-**Settings → 省 Token** is the management panel, split into **Overview / Compression / Prose / Chat / Prompt / About** tabs instead of one long page (About shows the plugin name, the version read from `package.json`, and a button that opens the GitHub repository):
+**Settings → 省 Token** is the management panel, split into **Overview / Compression / Prose / Prompt / About** tabs instead of one long page (About shows the plugin name, the version read from `package.json`, and a button that opens the GitHub repository):
 
 - One switch per transform (5 command filters, RTK structure compaction, 2 retrieval transforms, the punctuation tidy);
 - A plain-language compression-strength pick (gentle / default / aggressive) that sets the budgets and min-rewrite thresholds in one click, with the raw numbers still available under "advanced";
 - Advanced: budgets, `minChars`/`minGain`, retrieval thresholds, over-budget recovery (`spill`/`rerun`/`none`), `logEvery`, and the plugin master switch;
 - A three-way scope shared by the prose transforms (punctuation / words) (`off` / prose outputs only / all prose);
 - The word table (rules) editor: one row per word with an optional replacement (empty = delete), saved as `prose.politenessWords`; the built-in rules cover politeness words and speech particles (啊 / 呀 / 吧 / 呢 / 嘛 / 哦…), and a particle is only dropped at the end of a phrase so 酒吧 / 网吧 / 毛呢 / 哗啦 stay intact;
-- Conversation editing: rewrite recent messages; the rewrite only ships in the next request, never the durable log, and can be restored. Each message of the live turn also has a 改写 button in the chat; it matches on the message text, so it needs no session knowledge and works right after a restart;
-- The transform record: each recent prose change shown as a diff, removed words struck through in red and new text in green;
+- Each message of the live turn has a 改写 button in the chat; it matches on the message text, so it needs no session knowledge and works right after a restart;
 - The savings record: this process and all time, tokens and characters removed, the saved share, a per-tool table, and a message/reply strip count;
 - The profile directory the choice is written to, so you can see whether a switch actually persisted.
 
@@ -133,7 +130,7 @@ Walked through "every byte the model could act on" once more:
 - **Command output** (the big one): 5 command filters + 17 RTK structural compactors already cover pytest / git / tsc / package managers / eslint / cargo / go test / grep / find / ls / tree. The long tail (docker, kubectl, make…) runs through shape detection + generic cleanup + smart-truncation instead of one more hand-written parser — every parser is a regression-test surface to maintain.
 - **File reads**: large `read` gets a symbol outline, large `grep` gets capped. Going further (AST-only, skip import blocks) would trade "text the model can quote" for "a summary the model has to ask for again", with a real chance of dropping the one line that matters. Not worth it.
 - **JSON / images**: collapsing repeated JSON objects is the next candidate, but for a lockfile one deleted line can send the model after the wrong version — asymmetric risk, deferred. Image bytes are not text; that cost lives in the upstream multimodal encoder, where no plugin-side compression is safe.
-- **Conversation text**: covered by the word table, punctuation tidy and the conversation editor. Anything more aggressive (summarising history) needs another LLM call, which breaks the no-helper-process constraint.
+- **Conversation text**: covered by the word table and the punctuation tidy. Anything more aggressive (summarising history) needs another LLM call, which breaks the no-helper-process constraint.
 - **System prompt**: read-only. Every word in a prompt is a constraint the user chose, so the plugin never trims it and never appends to it.
 
 ## Design constraints
