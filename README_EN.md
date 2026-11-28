@@ -18,7 +18,7 @@ Plus two transformations the model never needs to read (independently switchable
 Plus two extras on the same derived path:
 
 - **Conversation editing** — rewrite any recent message from the settings page. The rewrite is only carried in the next request; it is never written to the durable log, and "restore" puts the original back.
-- **Transform record** — the settings page lists what each recent prose pass actually removed and added (which words, how many marks), so the trimming is auditable, not a black box.
+- **Transform record** — the settings page expands each recent prose change as a diff: removed words struck through in red, replaced or new text in green, the way a changed file reads on GitHub.
 
 ## What it keeps
 
@@ -60,7 +60,7 @@ To change a budget, add the field under that row in the profile's `cordis.patch.
 - A three-way scope shared by the prose transforms (punctuation / words) (`off` / prose outputs only / all prose);
 - The word table editor: one row per word with an optional replacement (empty = delete), saved as `prose.politenessWords`;
 - Conversation editing: rewrite recent messages; the rewrite only ships in the next request, never the durable log, and can be restored;
-- The transform record: what each recent prose pass removed and added (words, marks);
+- The transform record: each recent prose change shown as a diff, removed words struck through in red and new text in green;
 - The savings record: this process and all time, tokens and characters removed, the saved share, a per-tool table, and a message/reply strip count;
 - The profile directory the choice is written to, so you can see whether a switch actually persisted.
 

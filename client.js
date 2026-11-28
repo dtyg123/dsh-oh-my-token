@@ -178,7 +178,7 @@ window.__ModuleLoader__.load({
       editCancel: '取消',
       editEmpty: '还没有可编辑的消息，对话几句后这里会列出最近的内容。',
       notes: '自动变换记录',
-      notesHint: '程序最近自动删掉 / 加上的词与标点（散文步骤才有记录）。',
+      notesHint: '最近自动删改的原文：红字划线 = 删掉，绿字 = 替换或新增。',
       notesEmpty: '还没有变换记录。',
       notesAgo: (seconds) => (seconds < 60 ? `${seconds} 秒前` : `${Math.floor(seconds / 60)} 分钟前`),
     };
@@ -356,9 +356,41 @@ window.__ModuleLoader__.load({
       );
     }
 
+    /**
+     * One recorded change, shown the way a Git diff shows a changed line:
+     * removed text struck through in red, added text in green.
+     */
+    function DiffLine(props) {
+      const { segments, notes } = props;
+      if (!Array.isArray(segments) || segments.length === 0) {
+        return h('div', { style: { fontSize: '11px', color: 'var(--dsw-alias-label-secondary)' } },
+          Array.isArray(notes) ? notes.join('、') : '');
+      }
+      return h('div', {
+        style: {
+          fontSize: '12px', lineHeight: '18px', fontFamily: 'inherit',
+          overflowWrap: 'anywhere', whiteSpace: 'pre-wrap',
+          maxHeight: '76px', overflowY: 'auto',
+        },
+      }, segments.map((segment, index) => {
+        if (segment?.kind === 'del') {
+          return h('span', {
+            key: index,
+            style: { color: 'var(--dsw-alias-state-error-primary)', textDecoration: 'line-through' },
+          }, String(segment.text));
+        }
+        if (segment?.kind === 'add') {
+          return h('span', {
+            key: index,
+            style: { color: 'var(--dsw-alias-state-success-primary)', fontWeight: 600 },
+          }, String(segment.text));
+        }
+        return h('span', { key: index, style: { color: 'var(--dsw-alias-label-primary)' } }, String(segment?.text ?? ''));
+      }));
+    }
+
     /** A share bar for the saved ratio. */
-    function Bar(props) {
-      const ratio = Math.min(1, number(props.ratio));
+    function Bar(props) {      const ratio = Math.min(1, number(props.ratio));
       return h('div', {
         style: {
           height: '4px', borderRadius: '2px', marginTop: '8px',
@@ -997,13 +1029,25 @@ window.__ModuleLoader__.load({
           h('span', { style: { fontSize: '12px', fontWeight: 600 } }, text.notes),
           h('span', { style: { fontSize: '10px', color: 'var(--dsw-alias-label-secondary)' } }, text.notesHint)),
         (Array.isArray(state?.recent) && state.recent.length > 0)
-          ? h('div', { style: { display: 'flex', flexDirection: 'column', gap: '3px' } },
-            state.recent.slice(0, 15).map((entry, index) => h('div', {
+          ? h('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px' } },
+            state.recent.slice(0, 20).map((entry, index) => h('div', {
               key: index,
-              style: { fontSize: '11px', lineHeight: '16px', color: 'var(--dsw-alias-label-secondary)' },
+              style: {
+                padding: '5px 8px', borderRadius: '6px', minWidth: 0,
+                border: '1px solid var(--dsw-alias-border-l1)',
+                background: 'var(--dsw-alias-bg-layer-1)',
+              },
             },
-            h('span', { style: { color: 'var(--dsw-alias-label-primary)' } }, entry.label),
-            `  ${entry.notes.join('、')}  ·  ${text.notesAgo(Math.max(0, (Date.now() - entry.at) / 1000))}`)),
+            h('div', {
+              style: {
+                display: 'flex', gap: '8px', fontSize: '10px', lineHeight: '14px',
+                marginBottom: '2px', color: 'var(--dsw-alias-label-secondary)',
+              },
+            },
+            h('span', { style: { fontWeight: 600, color: 'var(--dsw-alias-label-primary)' } }, entry.label),
+            h('span', null, text.notesAgo(Math.max(0, (Date.now() - entry.at) / 1000)))),
+            h(DiffLine, { segments: entry.diff, notes: entry.notes }),
+            )),
           )
           : h('div', { style: { fontSize: '11px', color: 'var(--dsw-alias-label-secondary)' } }, text.notesEmpty),
       ),

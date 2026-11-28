@@ -4,6 +4,7 @@ import {
   collapseBlankLines,
   collapseRepeatedLines,
   countLines,
+  diffWords,
   headLines,
   isProseLine,
   resolveCarriageReturns,
@@ -125,6 +126,33 @@ test('an ASCII ellipsis is never collapsed or stripped', () => {
 
 test('the word step is a byte-identical no-op when nothing matches', () => {
   assert.equal(stripTrailingPeriods('nothing to see here', { words: [{ word: 'please' }] }), 'nothing to see here');
+});
+
+test('a changed line is recorded as a word diff', () => {
+  const diff = diffWords('谢谢，请稍等。', '稍等');
+  const deleted = diff.filter((segment) => segment.kind === 'del').map((segment) => segment.text).join('');
+  assert.ok(deleted.includes('谢谢'), deleted);
+  assert.ok(deleted.includes('请'), deleted);
+  assert.equal(diff.filter((segment) => segment.kind === 'add').length, 0);
+  assert.ok(diff.some((segment) => segment.kind === 'keep' && segment.text.includes('稍等')));
+});
+
+test('a replacement shows the new word as an addition', () => {
+  const diff = diffWords('请更新', '拜托更新');
+  assert.ok(diff.some((segment) => segment.kind === 'del' && segment.text.includes('请')));
+  assert.ok(diff.some((segment) => segment.kind === 'add' && segment.text.includes('拜托')));
+});
+
+test('an unchanged line is a single keep segment', () => {
+  assert.deepEqual(diffWords('same text', 'same text'), [{ kind: 'keep', text: 'same text' }]);
+});
+
+test('the prose step reports one diff line per changed line', () => {
+  const pairs = [];
+  stripTrailingPeriods('谢谢，请稍等。\nsrc/index.ts.\n。下一段。', {
+    onLine: (before, after) => pairs.push([before, after]),
+  });
+  assert.deepEqual(pairs, [['谢谢，请稍等。', '稍等'], ['。下一段。', '下一段']]);
 });
 
 test('stripAnsi and carriage-return repaints', () => {

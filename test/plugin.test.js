@@ -493,4 +493,9 @@ test('the prose record shows which words and marks were removed', async () => {
   assert.ok(recent.length >= 1, 'a prose note was recorded');
   assert.match(recent[0].notes.join(' '), /删「谢谢」/);
   assert.match(recent[0].notes.join(' '), /标点/);
+  const deleted = recent[0].diff.filter((segment) => segment.kind === 'del')
+    .map((segment) => segment.text).join('');
+  assert.match(deleted, /谢谢/);
+  assert.match(deleted, /请/);
+  assert.ok(!deleted.includes('xxxxxxxxxx'), 'untouched text is kept, not struck through');
 });

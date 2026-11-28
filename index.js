@@ -42,7 +42,7 @@ import {
   MODE_IDS, PROSE_SCOPES, applyConfigOverrides, effectiveConfig, mergeConfigPatch, readState,
   resolveModes, sanitizeConfigPatch, sanitizeEdits, sanitizeModePatch, sanitizeScope, stateDirectory, writeState,
 } from './lib/modes.js';
-import { describeProseChange } from './lib/text.js';
+import { describeProseChange, diffWords } from './lib/text.js';
 import {
   emptyStats, readStats, recordCall, recordMessageStrip, recordRewrite, summarize, writeStats,
 } from './lib/stats.js';
@@ -108,9 +108,10 @@ export function apply(ctx, config) {
   /** What the prose step removed/added, newest last; the page shows the tail. */
   const recent = [];
   const recordProseNote = (label, before, after) => {
+    const diff = diffWords(before, after);
     const notes = describeProseChange(before, after, policy.prose?.politenessWords);
-    if (notes.length === 0) return;
-    recent.push({ at: Date.now(), label, notes });
+    if (notes.length === 0 && !diff.some((segment) => segment.kind !== 'keep')) return;
+    recent.push({ at: Date.now(), label, notes, diff });
     if (recent.length > 50) recent.shift();
   };
 
