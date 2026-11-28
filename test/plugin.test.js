@@ -156,8 +156,7 @@ test('GET state lists every switch and the prose scope', async () => {
   const state = response.json();
   assert.equal(response.status, 200);
   assert.deepEqual(state.modes.map((mode) => mode.id), [
-    'pytest', 'git', 'tsc', 'packageManager', 'generic', 'rtk', 'readOutline', 'grepCap',
-    'proseStrip', 'politenessStrip',
+    'pytest', 'git', 'tsc', 'packageManager', 'generic', 'rtk', 'readOutline', 'grepCap', 'proseStrip',
   ]);
   assert.ok(state.modes.every((mode) => mode.on === true));
   assert.equal(state.proseScope, 'filtered');
@@ -425,7 +424,7 @@ test('GET /edit lists the recent messages of the last session, with user edits a
 test('the change record keeps the text the chat shows, so it can be matched', async () => {
   const { listeners, routes } = mount({ prose: { scope: 'all' } });
   const history = [
-    { id: 'a1', role: 'assistant', source: { kind: 'model' }, content: [{ type: 'text', text: '你好呀' }] },
+    { id: 'a1', role: 'assistant', source: { kind: 'model' }, content: [{ type: 'text', text: 'Build done' }] },
   ];
   const session = { messages: history, deriveMessages: () => history };
   await listeners.get('agent/pre-step')(
@@ -433,15 +432,15 @@ test('the change record keeps the text the chat shows, so it can be matched', as
     async () => ({ kind: 'enter', messages: [] }),
   );
   const stream = listeners.get('llm/stream')({}, async function* () {
-    yield { type: 'block-end', block: { type: 'text', text: '你好呀。' } };
+    yield { type: 'block-end', block: { type: 'text', text: 'Build done.' } };
   });
   for await (const chunk of stream) assert.ok(chunk !== undefined);
 
   const state = fakeResponse();
   await routes.get('/dsh-oh-my-token/state').handler({ method: 'GET' }, state);
   const note = state.json().recent[0];
-  assert.equal(note.after, '你好呀', 'the record carries the text the chat shows');
-  assert.ok(note.diff.some((segment) => segment.kind === 'del' && segment.text === '。'));
+  assert.equal(note.after, 'Build done', 'the record carries the text the chat shows');
+  assert.ok(note.diff.some((segment) => segment.kind === 'del' && segment.text === '.'));
 });
 
 test('an edit made from the chat needs no session and lands in the next request', async () => {

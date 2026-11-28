@@ -128,6 +128,19 @@ test('the word step is a byte-identical no-op when nothing matches', () => {
   assert.equal(stripTrailingPeriods('nothing to see here', { words: [{ word: 'please' }] }), 'nothing to see here');
 });
 
+test('built-in particles are deleted only at a phrase boundary', () => {
+  assert.equal(stripTrailingPeriods('好的呀。'), '好的');
+  assert.equal(stripTrailingPeriods('走吧！'), '走！');
+  assert.equal(stripTrailingPeriods('真的嘛，那行。'), '真的，那行');
+  // A particle inside a word keeps the word intact.
+  assert.equal(stripTrailingPeriods('酒吧。'), '酒吧');
+  assert.equal(stripTrailingPeriods('我去网吧。'), '我去网吧');
+  assert.equal(stripTrailingPeriods('这件是毛呢。'), '这件是毛呢');
+  assert.equal(stripTrailingPeriods('哗啦。'), '哗啦');
+  // Interjections that open a sentence go with their comma.
+  assert.equal(stripTrailingPeriods('哎呀，算了。'), '算了');
+});
+
 test('a changed line is recorded as a word diff', () => {
   const diff = diffWords('谢谢，请稍等。', '稍等');
   const deleted = diff.filter((segment) => segment.kind === 'del').map((segment) => segment.text).join('');

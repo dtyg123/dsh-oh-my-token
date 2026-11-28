@@ -36,9 +36,14 @@ test('RTK compaction is on by default and can be switched off', () => {
   assert.throws(() => resolveConfig({ rtk: 'yes' }), /rtk must be true or false/);
 });
 
-test('the default prose word list is the built-in politeness set', () => {
-  assert.deepEqual(resolveConfig({}).prose.politenessWords.map((entry) => entry.word),
-    ['谢谢', '多谢', '感谢', '请问', '麻烦您', '麻烦', '劳驾', '拜托', '辛苦', '请', 'please', 'thanks', 'thank you', 'kindly']);
+test('the default prose word list carries politeness words and particles', () => {
+  const words = resolveConfig({}).prose.politenessWords.map((entry) => entry.word);
+  for (const word of ['谢谢', '多谢', '感谢', '请问', '麻烦您', '麻烦', '劳驾', '拜托', '辛苦', '请', 'please', 'thanks', 'thank you', 'kindly']) {
+    assert.ok(words.includes(word), word);
+  }
+  for (const particle of ['啊', '呀', '吧', '呢', '嘛', '哦']) {
+    assert.ok(words.includes(particle), particle);
+  }
 });
 
 test('a custom politeness word list is validated', () => {

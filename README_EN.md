@@ -55,11 +55,11 @@ To change a budget, add the field under that row in the profile's `cordis.patch.
 
 **Settings → 省 Token** is the management panel, split into **Overview / Compression / Prose / Chat / Prompt** tabs instead of one long page:
 
-- One switch per transform (5 command filters, RTK structure compaction, 2 retrieval transforms, the punctuation tidy, the word delete/replace table);
+- One switch per transform (5 command filters, RTK structure compaction, 2 retrieval transforms, the punctuation tidy);
 - A plain-language compression-strength pick (gentle / default / aggressive) that sets the budgets and min-rewrite thresholds in one click, with the raw numbers still available under "advanced";
 - Advanced: budgets, `minChars`/`minGain`, retrieval thresholds, over-budget recovery (`spill`/`rerun`/`none`), `logEvery`, and the plugin master switch;
 - A three-way scope shared by the prose transforms (punctuation / words) (`off` / prose outputs only / all prose);
-- The word table editor: one row per word with an optional replacement (empty = delete), saved as `prose.politenessWords`;
+- The word table (rules) editor: one row per word with an optional replacement (empty = delete), saved as `prose.politenessWords`; the built-in rules cover politeness words and speech particles (啊 / 呀 / 吧 / 呢 / 嘛 / 哦…), and a particle is only dropped at the end of a phrase so 酒吧 / 网吧 / 毛呢 / 哗啦 stay intact;
 - Conversation editing: rewrite recent messages; the rewrite only ships in the next request, never the durable log, and can be restored. Each message of the live turn also has a 改写 button in the chat; it matches on the message text, so it needs no session knowledge and works right after a restart;
 - The transform record: each recent prose change shown as a diff, removed words struck through in red and new text in green;
 - The savings record: this process and all time, tokens and characters removed, the saved share, a per-tool table, and a message/reply strip count;
@@ -96,7 +96,7 @@ The 完整提示词 card in Settings → 省 Token is **read-only**, not an edit
 | `retrieval.maxGrepMatches` | `50` | |
 | `prose.stripTrailingPeriod` | `true` | Tidy punctuation: drop a mark opening a paragraph; collapse two stuck-together marks to one (a comma and a period keep the period, same-strength keeps the right one); then drop the run of trailing `.` / `。` / `,` / `，` (an ASCII ellipsis is kept). |
 | `prose.stripPoliteness` | `true` | Delete or replace words on prose lines via the `politenessWords` table. |
-| `prose.politenessWords` | built-in politeness list | Each entry is `{ word, replace? }`: empty/omitted `replace` deletes the word, a string replaces it. Unset = the built-in list (谢谢 / 请 / please / thanks, …); an explicit empty list turns the word step off. |
+| `prose.politenessWords` | built-in rules + particles | Each entry is `{ word, replace? }`: empty/omitted `replace` deletes the word, a string replaces it. Unset = the built-in rules (谢谢 / 请 / please / thanks, … plus particles 啊 / 呀 / 吧 / 呢 / 嘛 / 哦, …, deleted only at a phrase end and guarded against splitting 酒吧 / 网吧 / 毛呢 / 哗啦); an explicit empty list turns the word step off. |
 | `prose.scope` | `filtered` | `filtered` = only output a command filter marked as prose (e.g. `git log`); `all`; `off`. |
 | `recovery` | `spill` | `spill` \| `rerun` \| `none`. |
 | `logEvery` | `0` | Log a savings line every N rewritten results; `0` is quiet. |

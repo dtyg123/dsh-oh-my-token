@@ -547,7 +547,7 @@ window.__ModuleLoader__.load({
       switchesHint: '改动立即生效，无需重启。',
       filters: '命令输出过滤',
       retrieval: '检索式读取',
-      prose: '散文整理（标点 / 客套词）',
+      prose: '散文整理（标点 / 规则）',
       proseHint: '只对判定为散文的行生效。代码、diff、路径、URL、版本号一律不动。',
       scopes: {
         off: '关闭',
@@ -598,7 +598,6 @@ window.__ModuleLoader__.load({
         readOutline: ['大文件大纲', '超过行数阈值且没给 offset/limit 的 read 只返回符号大纲'],
         grepCap: ['搜索结果截断', '匹配过多时只留前 N 条并说明剩余数量'],
         proseStrip: ['标点整理', '段首标点删去；挨着的两个标点只留一个（逗号+句号留句号）；句末连续的 . ， 。 ， 删掉；省略号不动'],
-        politenessStrip: ['客套词删除/替换', '删去或替换「谢谢」「请」「please」「thanks」等；词表可在下方自定义，代码、URL、路径不动'],
       },
       file: '配置目录',
       none: '未找到配置目录，改动不会落盘',
@@ -614,8 +613,8 @@ window.__ModuleLoader__.load({
       },
       presetApply: '应用',
       rawSettings: '高级数字（原始配置）',
-      words: '词语删除 / 替换',
-      wordsHint: '每行一条：左边的词在散文行里被删掉；右边非空则替换成右边的内容。只作用于散文行，代码、URL、路径、版本号不动。',
+      words: '规则：词语删除 / 替换',
+      wordsHint: '每行一条规则：左边的词在散文行里被删掉，右边非空则替换成它。内置规则含「谢谢 / 请 / please / thanks」以及「啊 / 呀 / 吧 / 呢 / 嘛 / 哦」等语气词——语气词只在句尾或标点前删，所以「酒吧」「网吧」「毛呢」不会被拆。代码、URL、路径、版本号不参与。',
       wordLabel: '词',
       replaceLabel: '替换为空 = 删除',
       addWord: '加一个词',
@@ -1147,7 +1146,6 @@ window.__ModuleLoader__.load({
 
       const modes = Array.isArray(state?.modes) ? state.modes : [];
       const modeOf = (id) => modes.find((mode) => mode.id === id)?.on === true;
-      const proseOn = modeOf('proseStrip') || modeOf('politenessStrip');
       const cumulative = state?.cumulative ?? {};
       const session = state?.session ?? {};
       const tools = Array.isArray(cumulative.tools) ? cumulative.tools : [];
@@ -1301,9 +1299,6 @@ window.__ModuleLoader__.load({
           h(ModeRow, {
             id: 'proseStrip', on: modeOf('proseStrip'), text, busy, onToggle: toggle,
           }),
-          h(ModeRow, {
-            id: 'politenessStrip', on: modeOf('politenessStrip'), text, busy, onToggle: toggle,
-          }),
         ),
         h('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '6px' } },
           scopes.map((scope) => {
@@ -1314,7 +1309,7 @@ window.__ModuleLoader__.load({
               role: 'radio',
               'aria-checked': on ? 'true' : 'false',
               'data-scope': scope,
-              disabled: !proseOn || busy === 'scope',
+              disabled: busy === 'scope',
               onClick: () => setScope(scope),
               style: {
                 padding: '3px 9px', borderRadius: '999px',
@@ -1322,13 +1317,13 @@ window.__ModuleLoader__.load({
                 background: on ? 'var(--dsw-alias-bg-layer-1)' : 'transparent',
                 color: on ? 'var(--dsw-alias-label-primary)' : 'var(--dsw-alias-label-secondary)',
                 fontSize: '11px', lineHeight: '16px', font: 'inherit',
-                cursor: proseOn ? 'pointer' : 'default',
-                opacity: proseOn ? 1 : 0.55,
+                cursor: 'pointer',
+                opacity: 1,
               },
             }, text.scopes[scope] ?? scope);
           }),
         ),
-        modeOf('politenessStrip') ? h('div', { style: { marginTop: '8px' } },
+        h('div', { style: { marginTop: '10px', paddingTop: '10px', borderTop: '1px solid var(--dsw-alias-border-l1)' } },
           h('div', { style: { display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px' } },
             h('span', { style: { fontSize: '12px', fontWeight: 600 } }, text.words),
             h('span', { style: { fontSize: '10px', color: 'var(--dsw-alias-label-secondary)' } }, text.wordsHint)),
@@ -1372,7 +1367,7 @@ window.__ModuleLoader__.load({
             button(text.addWord, addWordRow, busy === 'words'),
             button(text.saveWords, saveWords, busy === 'words' || (wordsDraft ?? []).every((entry) => entry.word === '' && entry.replace === '')),
           ),
-        ) : null,
+        ),
         h('div', {
           style: {
             marginTop: '6px', fontSize: '11px', lineHeight: '16px',

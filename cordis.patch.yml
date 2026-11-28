@@ -49,8 +49,10 @@
           stripTrailingPeriod: true
           # Word delete/replace: each entry is { word, replace? }; empty or
           # omitted replace deletes the word, a string replaces it. The
-          # built-in politeness list (谢谢 / 请 / please / thanks, …) applies
-          # when this key is absent.
+          # built-in list (谢谢 / 请 / please / thanks, … plus the speech
+          # particles 啊 / 呀 / 吧 / 呢 / 嘛 / 哦, … — deleted only at a phrase
+          # end, so 酒吧 / 网吧 / 毛呢 / 哗啦 survive) applies when this key is
+          # absent.
           # stripPoliteness: true
           # politenessWords:
           #   - word: 谢谢

@@ -239,7 +239,7 @@ export function apply(ctx, config) {
   };
   const liveHistoryOptions = () => ({
     punctuation: state.modes.proseStrip !== false,
-    politeness: state.modes.politenessStrip !== false,
+    politeness: policy.prose?.stripPoliteness !== false,
     rtk: state.modes.rtk !== false,
     words: policy.prose?.politenessWords,
     edits: editsMap,
@@ -305,7 +305,7 @@ export function apply(ctx, config) {
     const decision = await next();
     if (decision?.kind !== 'enter') return decision;
     const wantPunctuation = state.modes.proseStrip !== false;
-    const wantPoliteness = state.modes.politenessStrip !== false;
+    const wantPoliteness = policy.prose?.stripPoliteness !== false;
     // Edits apply even with every prose switch off: they are the user's own
     // words, not a transform.
     if (!wantPunctuation && !wantPoliteness && editsMap.size === 0 && editsByText.size === 0) return decision;
@@ -339,7 +339,7 @@ export function apply(ctx, config) {
   ctx.on('llm/stream', (options, next) => {
     const stream = next();
     const punctuation = state.modes.proseStrip !== false;
-    const politeness = state.modes.politenessStrip !== false;
+    const politeness = policy.prose?.stripPoliteness !== false;
     if (!state.enabled || (!punctuation && !politeness)) return stream;
     return stripAssistantStream(stream, countStrip, {
       punctuation,

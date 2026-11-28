@@ -19,7 +19,6 @@ test('the row config seeds every switch', () => {
   assert.equal(modes.pytest, true);
   assert.equal(modes.readOutline, true);
   assert.equal(modes.rtk, true);
-  assert.equal(modes.politenessStrip, true);
 });
 
 test('effectiveConfig folds switches without disturbing budgets', () => {
@@ -37,10 +36,9 @@ test('effectiveConfig folds switches without disturbing budgets', () => {
   assert.equal(policy.prose.politenessWords, DEFAULT_POLITE_WORDS, 'the default word list rides along');
 });
 
-test('the politeness switch folds independently of punctuation', () => {
+test('the prose config keeps both steps independent', () => {
   const row = resolveConfig({ prose: { stripPoliteness: false } });
   const modes = resolveModes(row);
-  assert.equal(modes.politenessStrip, false);
   assert.equal(modes.proseStrip, true);
   const policy = effectiveConfig(row, { modes, proseScope: 'all' });
   assert.equal(policy.prose.stripPoliteness, false);
