@@ -596,7 +596,6 @@ window.__ModuleLoader__.load({
         'retrieval.maxGrepMatches': 'grep 匹配上限',
         logEvery: '每 N 次打印日志',
       },
-      nothingToRead: '没有读到当前生效的系统提示词（服务端未返回内容）。',
       modes: {
         pytest: ['pytest 结果', '通过只留一行结论；失败保留 FAILED、断言和摘要'],
         git: ['git 输出', 'status 干净就收成一行，diff 只留文件头和改动行'],
@@ -620,7 +619,6 @@ window.__ModuleLoader__.load({
         aggressive: '狠压（最省 token）',
         custom: '自定义（手动调过）',
       },
-      presetApply: '应用',
       rawSettings: '高级数字（原始配置）',
       words: '自定义词表',
       wordsHint: '每行一个词：右边留空就删除，填上内容就替换。语气词也在这张表里；只在句尾或标点前处理，所以「酒吧」「网吧」「毛呢」不会被拆。含 URL、路径或代码的整行不动。',
@@ -1318,10 +1316,10 @@ window.__ModuleLoader__.load({
             ? null
             : button(promptCopied ? text.promptCopied : text.promptCopy, () => { copyPrompt(); }, false)),
         prompt === null
-          ? h('div', { style: { marginTop: '6px', fontSize: '11px', lineHeight: '16px', color: 'var(--dsw-alias-label-secondary)' } }, text.promptHint)
+          ? null
           : prompt.text === ''
             ? h('div', { style: { marginTop: '6px', fontSize: '11px', color: 'var(--dsw-alias-label-secondary)' } }, text.promptEmpty)
-              : h('pre', {
+            : h('pre', {
               style: {
                 margin: '8px 0 0', padding: '8px 10px', borderRadius: '8px',
                 border: '1px solid var(--dsw-alias-border-l1)',

@@ -131,9 +131,13 @@ test('a long unstructured blob keeps head and tail', () => {
 
 test('a numbered file dump keeps its line numbers', () => {
   const body = Array.from({ length: 300 }, (_, i) => `${i + 1}| const value${i} = ${i};`).join('\n');
-  const out = readNumbered(body);
-  assert.ok(out.includes('(file continues)'));
-  assert.ok(out.length < body.length);
+  const direct = readNumbered(body);
+  assert.ok(direct.includes('(file continues)'));
+  assert.ok(direct.length < body.length);
+  const out = rtkCompress(body);
+  assert.equal(out.id, 'read-numbered');
+  assert.ok(out.text.includes('(file continues)'));
+  assert.ok(out.text.length < body.length);
 });
 
 test('a search result list groups by directory', () => {

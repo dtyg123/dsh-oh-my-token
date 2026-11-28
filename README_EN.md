@@ -103,7 +103,7 @@ An unknown field is an error at activation, not a silent no-op. Every field abov
 
 ### Why the period trimmer is guarded
 
-Deleting a period from a filename, a URL, a version or a line of code corrupts data to save one token. `isProseLine` therefore refuses:
+Deleting a period from a filename, a URL, a version or a line of code corrupts data to save one token. The prose guards therefore refuse:
 
 - fenced or inline code, diff lines, lines starting with `{ [ <`, lines ending in `;{}=`, and lines carrying code punctuation (`= ( ) ; { } [ ]`) that end in a comma;
 - assignment/statement lines (containing `= ; { }` or starting with `const`/`function`/`import`), which word removal never touches;
