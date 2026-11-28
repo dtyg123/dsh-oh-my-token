@@ -294,32 +294,6 @@ export function apply(ctx, config) {
     return items;
   }
 
-  /**
-   * The stored text of one message, for the chat's change lookup. Reads the raw
-   * log when the session exposes it, else the derived copy — the text the chat
-   * shows is what the log holds.
-   *
-   * @param {string} id - message id.
-   * @returns {string | undefined} the joined text blocks, or undefined.
-   */
-  function messageTextById(id) {
-    const source = latestSession;
-    if (source === null || typeof id !== 'string' || id === '') return undefined;
-    const list = Array.isArray(source.messages)
-      ? source.messages
-      : typeof source.deriveMessages === 'function' ? source.deriveMessages() : [];
-    for (let i = list.length - 1; i >= 0; i -= 1) {
-      const message = list[i];
-      if (message === null || typeof message !== 'object' || message.id !== id) continue;
-      if (!Array.isArray(message.content)) return undefined;
-      return message.content
-        .filter((block) => block !== null && typeof block === 'object' && block.type === 'text' && typeof block.text === 'string')
-        .map((block) => block.text)
-        .join('\n');
-    }
-    return undefined;
-  }
-
   // The claimed messages become both the durable `user/message` append and the
   // model request (which is derived from the session log), so stripping here
   // keeps the record and the bytes the model reads identical.
@@ -533,46 +507,6 @@ export function apply(ctx, config) {
         }
       },
     }), 'oh-my-token: edit route');
-
-    // The chat looks a message up here to draw what the request dropped. The
-    // record is keyed by the text the message actually shows, so a reply (whose
-    // body the harness renders itself) can be matched by its message id.
-    webCtx.effect(() => webCtx.webServer.register({
-      kind: 'exact',
-      path: '/dsh-oh-my-token/diff',
-      handler: async (request, response) => {
-        if (request.method !== 'GET') {
-          response.writeHead(405, { allow: 'GET' });
-          response.end();
-          return;
-        }
-        const url = new URL(request.url ?? '/', 'http://localhost');
-        const id = url.searchParams.get('id') ?? '';
-        const text = messageTextById(id);
-        if (text === undefined) {
-          sendJson(response, 200, { segments: [] });
-          return;
-        }
-        const shown = text.length > 2000 ? text.slice(0, 2000) : text;
-        const seen = new Set();
-        const segments = [];
-        // A record is one changed line; the reply lists every recorded line it
-        // contains, in the order that puts the removals first.
-        for (let i = state.recent.length - 1; i >= 0; i -= 1) {
-          const note = state.recent[i];
-          if (typeof note.after !== 'string' || note.after === '') continue;
-          if (!shown.includes(note.after)) continue;
-          for (const segment of note.diff) {
-            if (segment.kind === 'keep') continue;
-            const key = `${segment.kind}\u0000${segment.text}`;
-            if (seen.has(key)) continue;
-            seen.add(key);
-            segments.push(segment);
-          }
-        }
-        sendJson(response, 200, { segments });
-      },
-    }), 'oh-my-token: diff route');
   });
 
   ctx.logger.info(

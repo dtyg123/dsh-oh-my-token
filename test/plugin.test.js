@@ -89,10 +89,10 @@ test('identity', () => {
   assert.deepEqual(inject, ['tools']);
 });
 
-test('registers its four listeners and five routes', () => {
+test('registers its four listeners and four routes', () => {
   const { listeners, routes, infos } = mount({});
   assert.deepEqual([...listeners.keys()], ['tools/post-execute', 'agent/pre-step', 'system-prompt/assemble', 'llm/stream']);
-  assert.deepEqual([...routes.keys()], ['/dsh-oh-my-token/state', '/dsh-oh-my-token/stats', '/dsh-oh-my-token/prompt', '/dsh-oh-my-token/edit', '/dsh-oh-my-token/diff']);
+  assert.deepEqual([...routes.keys()], ['/dsh-oh-my-token/state', '/dsh-oh-my-token/stats', '/dsh-oh-my-token/prompt', '/dsh-oh-my-token/edit']);
   assert.equal(infos.length, 1);
 });
 
@@ -465,7 +465,7 @@ test('GET /edit lists the recent messages of the last session, with user edits a
   assert.equal(session.deriveMessages()[0].content[0].text, 'Old question');
 });
 
-test('the chat can find what a message lost, by message id', async () => {
+test('the change record keeps the text the chat shows, so it can be matched', async () => {
   const { listeners, routes } = mount({ prose: { scope: 'all' } });
   const history = [
     { id: 'a1', role: 'assistant', source: { kind: 'model' }, content: [{ type: 'text', text: '你好呀' }] },
@@ -484,24 +484,11 @@ test('the chat can find what a message lost, by message id', async () => {
   await routes.get('/dsh-oh-my-token/state').handler({ method: 'GET' }, state);
   const note = state.json().recent[0];
   assert.equal(note.after, '你好呀', 'the record carries the text the chat shows');
-
-  const diff = fakeResponse();
-  await routes.get('/dsh-oh-my-token/diff').handler(
-    { method: 'GET', url: '/dsh-oh-my-token/diff?id=a1' },
-    diff,
-  );
-  assert.equal(diff.status, 200);
-  assert.ok(diff.json().segments.some((segment) => segment.kind === 'del' && segment.text === '。'));
-
-  const unknown = fakeResponse();
-  await routes.get('/dsh-oh-my-token/diff').handler(
-    { method: 'GET', url: '/dsh-oh-my-token/diff?id=nope' },
-    unknown,
-  );
-  assert.deepEqual(unknown.json().segments, [], 'an unknown id is empty, not an error');
+  assert.ok(note.diff.some((segment) => segment.kind === 'del' && segment.text === '。'));
 });
 
-test('conversation edits are persisted in the state file', async () => {  const dir = mkdtempSync(join(tmpdir(), 'oh-my-token-'));
+test('conversation edits are persisted in the state file', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'oh-my-token-'));
   const { routes } = mount({}, { profileDir: dir });
   const response = fakeResponse();
   await routes.get('/dsh-oh-my-token/edit').handler(

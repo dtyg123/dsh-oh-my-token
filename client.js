@@ -24,7 +24,6 @@ window.__ModuleLoader__.load({
     const STATS_ENDPOINT = '/dsh-oh-my-token/stats';
     const PROMPT_ENDPOINT = '/dsh-oh-my-token/prompt';
     const EDIT_ENDPOINT = '/dsh-oh-my-token/edit';
-    const DIFF_ENDPOINT = '/dsh-oh-my-token/diff';
 
     // ── In-chat change marks ──────────────────────────────────────────────
     //
@@ -139,6 +138,101 @@ window.__ModuleLoader__.load({
       },
     };
 
+    /**
+     * A reply's body is rendered as markdown by the harness, so it has no text
+     * hook. Its finished DOM is decorated instead: the words the request drops
+     * are put back where they were, red and struck through. A re-render
+     * replaces that DOM, and the observer decorates the new copy.
+     */
+    const MARK_ATTR = 'data-oh-my-token-mark';
+    const MARKED_ATTR = 'data-oh-my-token-marked';
+    const RED_CSS = 'color:var(--dsw-alias-state-error-primary);text-decoration:line-through;background:rgba(239,68,68,.16);border-radius:3px';
+    const GREEN_CSS = 'color:var(--dsw-alias-state-success-primary);font-weight:600;background:rgba(34,197,94,.18);border-radius:3px';
+
+    /** The body's text and each text node's offset in it. */
+    function bodyText(root) {
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      const nodes = [];
+      let text = '';
+      for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+        const value = node.nodeValue ?? '';
+        if (value === '') continue;
+        nodes.push({ node, start: text.length });
+        text += value;
+      }
+      return { text, nodes };
+    }
+
+    /** One text node rebuilt with its removals marked. */
+    function markedFragment(value, removals) {
+      const fragment = document.createDocumentFragment();
+      let cursor = 0;
+      for (const removal of removals) {
+        if (removal.local < cursor) continue;
+        if (removal.local > cursor) fragment.appendChild(document.createTextNode(value.slice(cursor, removal.local)));
+        const anchor = value.slice(removal.local, removal.local + 1);
+        const removed = document.createElement('span');
+        removed.setAttribute(MARK_ATTR, '1');
+        removed.style.cssText = RED_CSS;
+        removed.textContent = removal.removed;
+        if (removal.trailing === true) {
+          fragment.appendChild(document.createTextNode(anchor));
+          fragment.appendChild(removed);
+        } else {
+          fragment.appendChild(removed);
+          if (removal.added !== '') {
+            const added = document.createElement('span');
+            added.setAttribute(MARK_ATTR, '1');
+            added.style.cssText = GREEN_CSS;
+            added.textContent = removal.added;
+            fragment.appendChild(added);
+          }
+          fragment.appendChild(document.createTextNode(anchor));
+        }
+        cursor = removal.local + 1;
+      }
+      if (cursor < value.length) fragment.appendChild(document.createTextNode(value.slice(cursor)));
+      return fragment;
+    }
+
+    /**
+     * Decorate every rendered reply body that has a record. Bodies already
+     * decorated keep their marks; a re-render drops the attribute with the DOM.
+     */
+    function decorateBodies() {
+      if (diffByText.size === 0 || typeof document === 'undefined') return;
+      for (const root of document.querySelectorAll('[data-text-interaction-source]:not([data-message-bubble])')) {
+        if (root.hasAttribute(MARKED_ATTR)) continue;
+        const { text, nodes } = bodyText(root);
+        if (text === '' || nodes.length === 0) continue;
+        const removals = removalsOf(text);
+        if (removals === null) continue;
+        const groups = new Map();
+        for (const removal of removals) {
+          let hit = null;
+          for (const entry of nodes) {
+            if (entry.start > removal.start) break;
+            hit = entry;
+          }
+          if (hit === null) continue;
+          const local = removal.start - hit.start;
+          const value = hit.node.nodeValue ?? '';
+          if (local < 0 || local >= value.length) continue;
+          if (!groups.has(hit.node)) groups.set(hit.node, []);
+          groups.get(hit.node).push({ ...removal, local });
+        }
+        let changed = false;
+        for (const [node, list] of groups) {
+          const parent = node.parentNode;
+          if (parent === null) continue;
+          list.sort((left, right) => left.local - right.local);
+          parent.replaceChild(markedFragment(node.nodeValue ?? '', list), node);
+          changed = true;
+        }
+        if (changed) root.setAttribute(MARKED_ATTR, '1');
+      }
+    }
+
     const RED_MARK = {
       color: 'var(--dsw-alias-state-error-primary)',
       textDecoration: 'line-through',
@@ -164,57 +258,6 @@ window.__ModuleLoader__.load({
         added === '' ? null : h('span', { key: 'added', style: GREEN_MARK }, added),
         data.trailing === true ? null : anchor);
     }
-
-    /**
-     * The assistant reply's change marks. The reply body is rendered by the
-     * harness's markdown, which offers no text hook, so the reply's action row
-     * carries the same red/green record instead.
-     */
-    function AssistantDiffChip(props) {
-      const id = props?.messageId;
-      const [segments, setSegments] = React.useState(null);
-      React.useEffect(() => {
-        if (typeof id !== 'string' || id === '') return undefined;
-        let live = true;
-        // The record is persisted by a debounced flush, so an empty answer is
-        // retried a couple of times before the chip gives up.
-        const timers = [];
-        const read = (attempt) => {
-          fetch(`${DIFF_ENDPOINT}?id=${encodeURIComponent(id)}`, { headers: { accept: 'application/json' } })
-            .then((response) => (response.ok ? response.json() : null))
-            .then((body) => {
-              if (!live) return;
-              const found = Array.isArray(body?.segments) ? body.segments : [];
-              if (found.length > 0 || attempt >= 3) setSegments(found);
-              else timers.push(setTimeout(() => read(attempt + 1), 1500));
-            })
-            .catch(() => { if (live) setSegments([]); });
-        };
-        read(0);
-        return () => {
-          live = false;
-          for (const timer of timers) clearTimeout(timer);
-        };
-      }, [id]);
-      if (!Array.isArray(segments)) return null;
-      const changed = segments.filter((segment) => segment?.kind !== 'keep' && typeof segment?.text === 'string' && segment.text !== '');
-      if (changed.length === 0) return null;
-      return h('span', {
-        title: '省 Token：本次自动删改',
-        style: {
-          display: 'inline-flex', alignItems: 'baseline', gap: '2px', minWidth: 0,
-          padding: '0 4px', borderRadius: '4px', maxWidth: '320px', overflow: 'hidden',
-          fontSize: '10px', lineHeight: '16px', whiteSpace: 'nowrap',
-          color: 'var(--dsw-alias-label-secondary)',
-          background: 'var(--dsw-alias-bg-layer-1)',
-        },
-      }, h('span', { key: 'label', style: { flex: 'none', marginRight: '2px' } }, '省'),
-      ...changed.slice(0, 8).map((segment, index) => h('span', {
-        key: index,
-        style: segment.kind === 'del' ? RED_MARK : GREEN_MARK,
-      }, segment.text)));
-    }
-
 
     /**
      * Plain-language strength presets: one pick sets the budgets and the
@@ -1360,7 +1403,39 @@ window.__ModuleLoader__.load({
           if (releaseRule !== undefined) releaseRule();
           releaseRule = ctx.uiConversation.userText.register(diffRule);
         };
-        nudgeDiffRules = () => { if (releaseRule !== undefined) armRule(); };
+        // Replies have no text hook, so their finished bodies are decorated and
+        // observed instead; the pass is a no-op when nothing matches.
+        let decorateNow = () => {};
+        if (typeof document !== 'undefined' && typeof MutationObserver !== 'undefined') {
+          let scheduled = 0;
+          let applying = false;
+          decorateNow = () => {
+            applying = true;
+            try {
+              decorateBodies();
+            } finally {
+              applying = false;
+            }
+          };
+          const schedule = () => {
+            if (applying || scheduled !== 0) return;
+            scheduled = setTimeout(() => {
+              scheduled = 0;
+              decorateNow();
+            }, 120);
+          };
+          const observer = new MutationObserver(schedule);
+          observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+          ctx.effect(() => () => {
+            observer.disconnect();
+            if (scheduled !== 0) clearTimeout(scheduled);
+          });
+          decorateNow();
+        }
+        nudgeDiffRules = () => {
+          armRule();
+          decorateNow();
+        };
         armRule();
 
         // Keep the message → change map warm even while the settings page is
@@ -1368,7 +1443,12 @@ window.__ModuleLoader__.load({
         const refreshDiffs = () => {
           fetch(STATE_ENDPOINT, { headers: { accept: 'application/json' } })
             .then((response) => (response.ok ? response.json() : null))
-            .then((body) => { if (rememberDiffs(body?.recent)) armRule(); })
+            .then((body) => {
+              if (rememberDiffs(body?.recent)) {
+                armRule();
+                decorateNow();
+              }
+            })
             .catch(() => {});
         };
         refreshDiffs();
@@ -1391,13 +1471,6 @@ window.__ModuleLoader__.load({
           key: DIFF_RULE_ID,
           priority: 50,
         }, ProseDiffNode));
-
-        // The same record in the reply's action row, since its markdown body is
-        // rendered by the harness and offers no text hook.
-        ctx.slots.inject('conversation.chat.assistant-actions', () => ctx.slots.register({
-          name: 'conversation.chat.assistant-actions',
-          id: DIFF_RULE_ID,
-        }, AssistantDiffChip));
       },
     };
   },
