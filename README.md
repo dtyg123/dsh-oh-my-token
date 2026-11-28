@@ -159,6 +159,20 @@ oh-my-token lint [config.json]  # 校验行配置，不启动 DSH
 
 不强制也不承诺什么——代码已经归你用了。
 
+## 贡献者
+
+名单按 GitHub 的实时数据渲染，不在仓库里写死：
+
+<a href="https://github.com/dtyg123/dsh-oh-my-token/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=dtyg123/dsh-oh-my-token" alt="Contributors" />
+</a>
+
+## Star
+
+[![Star 趋势](https://api.star-history.com/svg?repos=dtyg123/dsh-oh-my-token&type=Date)](https://star-history.com/#dtyg123/dsh-oh-my-token&Date)
+
+![GitHub stars](https://img.shields.io/github/stars/dtyg123/dsh-oh-my-token?style=social)
+
 ## 致谢
 
 - **[RTK](https://github.com/rtk-ai/rtk)（Apache-2.0）** — 按命令过滤工具输出的思路来自 RTK；本插件的命令过滤器与结构过滤器都是纯 JS 实现。

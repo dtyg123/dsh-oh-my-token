@@ -159,6 +159,20 @@ This plugin is fully open-source under the MIT licence and maintained on persona
 
 Not required, not expected, and it doesn't buy any promises — the code is already yours.
 
+## Contributors
+
+Rendered from GitHub's live data — nothing is hard-coded in the repository:
+
+<a href="https://github.com/dtyg123/dsh-oh-my-token/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=dtyg123/dsh-oh-my-token" alt="Contributors" />
+</a>
+
+## Stars
+
+[![Star history](https://api.star-history.com/svg?repos=dtyg123/dsh-oh-my-token&type=Date)](https://star-history.com/#dtyg123/dsh-oh-my-token&Date)
+
+![GitHub stars](https://img.shields.io/github/stars/dtyg123/dsh-oh-my-token?style=social)
+
 ## Acknowledgements
 
 - **[RTK](https://github.com/rtk-ai/rtk) (Apache-2.0)** — the per-command output-filtering idea comes from RTK; this plugin implements both the command filters and the structural filters in pure JS.

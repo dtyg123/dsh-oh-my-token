@@ -162,6 +162,8 @@ test('GET state lists every switch and the prose scope', async () => {
   assert.equal(state.proseScope, 'filtered');
   assert.deepEqual(state.scopes, ['off', 'filtered', 'all']);
   assert.equal('systemPrompt' in state, false, 'the prompt editor is gone');
+  assert.equal(state.version, '0.0.1', 'the About card reads the package version');
+  assert.match(state.repo, /^https:\/\/github\.com\/dtyg123\/dsh-oh-my-token$/);
   assert.equal(state.cumulative.savedChars, 0);
 });
 

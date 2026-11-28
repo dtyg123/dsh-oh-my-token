@@ -31,6 +31,7 @@
  * @module dsh-oh-my-token
  */
 
+import { readFileSync } from 'node:fs';
 import { resolveConfig } from './lib/config.js';
 import { compressToolResult, normalizeDecision } from './lib/gate.js';
 import { stripAssistantStream, stripClaimedMessages, stripHistoryMessages } from './lib/messages.js';
@@ -47,6 +48,16 @@ import {
 
 /** Cordis plugin identity. */
 export const name = 'oh-my-token';
+/** The repository the About card links to. */
+const REPOSITORY = 'https://github.com/dtyg123/dsh-oh-my-token';
+/** This package's own version, for the About card; empty when unreadable. */
+const VERSION = (() => {
+  try {
+    return String(JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version ?? '');
+  } catch {
+    return '';
+  }
+})();
 /** The tool registry, plus the optional web server for the settings page. */
 export const inject = ['tools'];
 /** How long statistics may sit unsaved after the last change. */
@@ -172,6 +183,8 @@ export function apply(ctx, config) {
     config: applyConfigOverrides(row, state.config),
     recent: state.recent.slice(-50).reverse(),
     editDiffs: editDiffs(),
+    version: VERSION,
+    repo: REPOSITORY,
     profileDir: profileDir ?? null,
     session: summarize(session),
     cumulative: summarize(cumulative),

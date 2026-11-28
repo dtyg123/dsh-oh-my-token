@@ -529,6 +529,7 @@ window.__ModuleLoader__.load({
         prose: '散文',
         chat: '对话',
         prompt: '提示词',
+        about: '关于',
       },
       failed: '无法连接插件',
       refresh: '刷新',
@@ -570,6 +571,9 @@ window.__ModuleLoader__.load({
       promptStats: (sections, chars) => `${sections} 段 · ${chars} 字符`,
       promptNone: '还没有发出过请求。先随便对话一句，插件会记下那次真正发给模型的提示词，再点「获取」。',
       promptEmpty: '没有读到提示词（宿主未注册系统提示词服务）。',
+      aboutHint: 'DeepSeek Harness 原生省 Token 插件：命令输出过滤、结构压缩、检索式读取、散文整理、对话改写、提示词查看。纯 JS，无外部二进制、无额外服务。',
+      aboutOpen: '★ 打开 GitHub 仓库',
+      aboutLicense: 'MIT 许可 · 版本来自 package.json',
       advanced: '高级配置',
       advancedHint: '数字与枚举项改完点「保存配置」；开关立即生效。',
       saveConfig: '保存配置',
@@ -1562,6 +1566,36 @@ window.__ModuleLoader__.load({
               button(text.confirmNo, () => { setConfirming(false); }, false))
             : button(text.reset, () => { setConfirming(true); }, busy === 'reset' || state === null),
         ),
+      ),
+      ]),
+      pane('about', [
+      h(Card, null,
+        h('div', { style: { display: 'flex', alignItems: 'baseline', gap: '10px', flexWrap: 'wrap' } },
+          h('span', { style: { fontSize: '16px', fontWeight: 600 } }, 'Oh My Token'),
+          h('span', {
+            style: { fontSize: '11px', fontVariantNumeric: 'tabular-nums', color: 'var(--dsw-alias-label-secondary)' },
+          }, `v${state?.version || '—'}`)),
+        h('div', {
+          style: { marginTop: '4px', fontSize: '11px', color: 'var(--dsw-alias-label-secondary)' },
+        }, 'dsh-oh-my-token · MIT'),
+        h('div', {
+          style: { marginTop: '8px', fontSize: '11px', lineHeight: '17px', color: 'var(--dsw-alias-label-secondary)' },
+        }, text.aboutHint),
+        h('div', { style: { marginTop: '12px', display: 'flex', gap: '8px', flexWrap: 'wrap' } },
+          h('a', {
+            href: state?.repo ?? 'https://github.com/dtyg123/dsh-oh-my-token',
+            target: '_blank',
+            rel: 'noreferrer noopener',
+            style: {
+              display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 12px',
+              borderRadius: '6px', textDecoration: 'none', font: 'inherit', fontSize: '11px',
+              lineHeight: '18px', border: '1px solid var(--dsw-alias-brand-primary)',
+              background: 'var(--dsw-alias-brand-primary)', color: 'var(--dsw-alias-bg-base)',
+            },
+          }, text.aboutOpen)),
+        h('div', {
+          style: { marginTop: '8px', fontSize: '10px', color: 'var(--dsw-alias-label-secondary)' },
+        }, text.aboutLicense),
       ),
       ]),
       );
