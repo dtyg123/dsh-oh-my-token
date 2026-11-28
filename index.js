@@ -139,11 +139,20 @@ export function apply(ctx, config) {
 
   const session = emptyStats();
   let cumulative = readStats(profileDir);
-  // The prompt that was actually used. Reading it live from the HTTP route
-  // deadlocks inside the host, so the assemble waterfall records a snapshot
-  // instead — and that is the honest source anyway: it is the prompt a request
-  // carried, including every section other plugins injected.
-  let lastPrompt = null;
+  // Live read for the prompt card: assemble the currently registered sections
+  // on demand, so the prompt is readable before any request exists. A client
+  // HTTP round-trip cannot read it live — doing so from inside the route
+  // handler deadlocks the host — so the handler calls this instead.
+  const livePrompt = async () => {
+    try {
+      const assemble = ctx.get?.('systemPrompt')?.assemble?.bind(ctx.get('systemPrompt'));
+      if (typeof assemble !== 'function') return undefined;
+      return describeLiveAssembly(await assemble({ preview: true }));
+    } catch (error) {
+      ctx.logger?.warn?.(`oh-my-token: live prompt read failed (${String(error?.message ?? error)})`);
+      return undefined;
+    }
+  };
   let timer;
   const flush = () => {
     writeStats(profileDir, cumulative);
@@ -343,19 +352,6 @@ export function apply(ctx, config) {
     return messages === decision.messages ? decision : { ...decision, messages };
   });
 
-  // Observe the composed system prompt (never edit it): the waterfall is the
-  // point where every section is final, so the snapshot is byte-for-byte what
-  // the request carries.
-  ctx.on('system-prompt/assemble', async (assembly, _context, next) => {
-    const result = await next();
-    try {
-      lastPrompt = { ...describeLiveAssembly(result), at: Date.now() };
-    } catch (error) {
-      ctx.logger?.warn?.(`oh-my-token: prompt snapshot failed (${String(error?.message ?? error)})`);
-    }
-    return result;
-  });
-
   // Wrap the LLM chunk stream at the outermost waterfall position. The
   // `block-end` text is what the assembler uses for the assistant message and
   // what the durable stream records, so rewriting it here covers both.
@@ -470,10 +466,10 @@ export function apply(ctx, config) {
           response.end();
           return;
         }
-        // The snapshot the last request actually carried: every registered
-        // section, including the ones other plugins injected.
-        sendJson(response, 200, lastPrompt
-          ?? { prompt: '', capturedAt: null, source: 'none', sections: 0 });
+        // Assemble the currently effective prompt on demand, so the card works
+        // from the first launch, before any message has been sent.
+        const snapshot = await livePrompt();
+        sendJson(response, 200, snapshot ?? { prompt: '', capturedAt: null, source: 'none', sections: 0 });
       },
     }), 'oh-my-token: prompt route');
 

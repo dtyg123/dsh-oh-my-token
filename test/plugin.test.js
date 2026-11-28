@@ -89,9 +89,9 @@ test('identity', () => {
   assert.deepEqual(inject, ['tools']);
 });
 
-test('registers its four listeners and four routes', () => {
+test('registers its three listeners and four routes', () => {
   const { listeners, routes, infos } = mount({});
-  assert.deepEqual([...listeners.keys()], ['tools/post-execute', 'agent/pre-step', 'system-prompt/assemble', 'llm/stream']);
+  assert.deepEqual([...listeners.keys()], ['tools/post-execute', 'agent/pre-step', 'llm/stream']);
   assert.deepEqual([...routes.keys()], ['/dsh-oh-my-token/state', '/dsh-oh-my-token/stats', '/dsh-oh-my-token/prompt', '/dsh-oh-my-token/edit']);
   assert.equal(infos.length, 1);
 });
@@ -324,13 +324,13 @@ test('an empty patch is rejected', async () => {
   assert.equal(response.status, 400);
 });
 
-test('the prompt route serves the snapshot the last request actually carried', async () => {
-  const { listeners, routes } = mount({});
+test('the prompt route assembles the live prompt on demand', async () => {
+  // No host prompt service registered: the card reports nothing readable.
+  const bare = mount({});
   const before = fakeResponse();
-  await routes.get('/dsh-oh-my-token/prompt').handler({ method: 'GET' }, before);
+  await bare.routes.get('/dsh-oh-my-token/prompt').handler({ method: 'GET' }, before);
   assert.deepEqual(before.json(), { prompt: '', capturedAt: null, source: 'none', sections: 0 });
 
-  const handler = listeners.get('system-prompt/assemble');
   const assembly = {
     sections: [
       { name: 'persona', text: 'You are an AI agent.', interpolate: true },
@@ -339,11 +339,9 @@ test('the prompt route serves the snapshot the last request actually carried', a
     contexts: [],
     variables: {},
   };
-  const result = await handler(assembly, {}, async () => assembly);
-  assert.equal(result, assembly, 'the listener only observes');
-
+  const live = mount({}, { services: { systemPrompt: { assemble: async () => assembly } } });
   const response = fakeResponse();
-  await routes.get('/dsh-oh-my-token/prompt').handler({ method: 'GET' }, response);
+  await live.routes.get('/dsh-oh-my-token/prompt').handler({ method: 'GET' }, response);
   const body = response.json();
   assert.equal(body.prompt, 'You are an AI agent.\n\nUse pnpm in this workspace.');
   assert.equal(body.sections, 2);

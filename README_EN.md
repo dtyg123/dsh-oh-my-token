@@ -59,7 +59,7 @@ To change a budget, add the field under that row in the profile's `cordis.patch.
 - A three-way scope shared by the prose transforms (punctuation / words) (`off` / prose outputs only / all prose);
 - The word table (rules) editor: one row per word with an optional replacement (empty = delete), saved as `prose.politenessWords`; the built-in rules cover politeness words and speech particles (啊 / 呀 / 吧 / 呢 / 嘛 / 哦…), and a particle is only dropped at the end of a phrase so 酒吧 / 网吧 / 毛呢 / 哗啦 stay intact;
 - Each message of the live turn has a 改写 button in the chat; it matches on the message text, so it needs no session knowledge and works right after a restart;
-- The savings record: this process and all time, tokens and characters removed, the saved share, a per-tool table, and a message/reply strip count;
+- The savings record: all time, tokens and characters removed, the saved share, a per-tool table, and a message/reply strip count;
 - The profile directory the choice is written to, so you can see whether a switch actually persisted.
 
 Changes apply on the next tool call — no restart. The choice is written to `dsh-oh-my-token.state.json` in the profile directory (`DSH_PROFILE_DIR` when set, otherwise discovered from the profile that carries this package) and wins over the bundle config on the next start. Statistics live beside it in `dsh-oh-my-token.stats.json` and can be cleared from the page.
@@ -68,7 +68,7 @@ Three exact routes back the page: `/dsh-oh-my-token/state`, `/dsh-oh-my-token/st
 
 ## Full prompt
 
-The 完整提示词 card in Settings → 省 Token is **read-only**, not an editor: press 获取提示词 and the plugin asks the host to assemble the system prompt right now, so what you see is exactly what the next request would carry — the core prompt, the host's context, and **sections other plugins injected**, in the same order. Variables such as `{{provider}}` and `{{model}}` are substituted with their current values; a variable with no value stays literal instead of failing the read.
+The 完整提示词 card in Settings → 省 Token is **read-only**, not an editor: press 获取提示词 and the plugin asks the host to assemble the effective system prompt right now (`assemble({ preview: true })`), so what you see is exactly what the next request would carry — the core prompt, the host's context, and **sections other plugins injected**, in the same order. Because it is assembled on demand, the prompt is readable even before the first request. Variables such as `{{provider}}` and `{{model}}` are substituted with their current values; a variable with no value stays literal instead of failing the read.
 
 - 复制全文 copies the text to the clipboard;
 - the card's header shows `N sections · M characters`, so a composed prompt can be checked at a glance;

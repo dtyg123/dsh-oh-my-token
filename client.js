@@ -536,7 +536,6 @@ window.__ModuleLoader__.load({
       confirm: '确认清除历史累计？',
       confirmYes: '确认清除',
       confirmNo: '取消',
-      session: '本次进程',
       cumulative: '历史累计',
       hero: '累计节省 Token（估算）',
       heroSub: (chars) => `来自被移除的 ${chars} 个字符`,
@@ -568,7 +567,6 @@ window.__ModuleLoader__.load({
       promptCopy: '复制全文',
       promptCopied: '已复制',
       promptStats: (sections, chars) => `${sections} 段 · ${chars} 字符`,
-      promptNone: '还没有发出过请求。先随便对话一句，插件会记下那次真正发给模型的提示词，再点「获取」。',
       promptEmpty: '没有读到提示词（宿主未注册系统提示词服务）。',
       aboutHint: 'DeepSeek Harness 原生省 Token 插件：命令输出过滤、结构压缩、检索式读取、散文整理、对话改写、提示词查看。纯 JS，无外部二进制、无额外服务。',
       aboutOpen: '★ 打开 GitHub 仓库',
@@ -598,7 +596,8 @@ window.__ModuleLoader__.load({
         'retrieval.maxGrepMatches': 'grep 匹配上限',
         logEvery: '每 N 次打印日志',
       },
-      nothingToRead: '没有读到当前生效的系统提示词（服务端未返回内容）。',      modes: {
+      nothingToRead: '没有读到当前生效的系统提示词（服务端未返回内容）。',
+      modes: {
         pytest: ['pytest 结果', '通过时只留一行结论；失败时保留 FAILED、断言与摘要'],
         git: ['git 输出', 'status 干净时折叠成一行，diff 只留文件头和变更行'],
         tsc: ['tsc 输出', '只保留 error TS 开头的行与总数，告警丢弃'],
@@ -915,7 +914,6 @@ window.__ModuleLoader__.load({
           setPrompt({
             text: typeof body?.prompt === 'string' ? body.prompt : '',
             sections: typeof body?.sections === 'number' ? body.sections : 0,
-            none: body?.source === 'none',
           });
           setPromptCopied(false);
           setError('');
@@ -949,7 +947,7 @@ window.__ModuleLoader__.load({
           });
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
           const body = await response.json();
-          setState((current) => ({ ...current, cumulative: body.cumulative, session: body.session }));
+          setState((current) => ({ ...current, cumulative: body.cumulative }));
           setError('');
         } catch (failure) {
           setError(`${text.failed}: ${String(failure?.message ?? failure)}`);
@@ -1063,7 +1061,6 @@ window.__ModuleLoader__.load({
       const modes = Array.isArray(state?.modes) ? state.modes : [];
       const modeOf = (id) => modes.find((mode) => mode.id === id)?.on === true;
       const cumulative = state?.cumulative ?? {};
-      const session = state?.session ?? {};
       const tools = Array.isArray(cumulative.tools) ? cumulative.tools : [];
       const scopes = Array.isArray(state?.scopes) ? state.scopes : ['off', 'filtered', 'all'];
 
@@ -1134,7 +1131,6 @@ window.__ModuleLoader__.load({
         }, text.heroSub(compact(cumulative.savedChars))),
       ),
       h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '12px' } },
-        h(ScopeCard, { title: text.session, summary: session, text }),
         h(ScopeCard, { title: text.cumulative, summary: cumulative, text }),
       ),
       ]),
@@ -1305,10 +1301,8 @@ window.__ModuleLoader__.load({
             : button(promptCopied ? text.promptCopied : text.promptCopy, () => { copyPrompt(); }, false)),
         prompt === null
           ? h('div', { style: { marginTop: '6px', fontSize: '11px', lineHeight: '16px', color: 'var(--dsw-alias-label-secondary)' } }, text.promptHint)
-          : prompt.none === true
-            ? h('div', { style: { marginTop: '6px', fontSize: '11px', lineHeight: '16px', color: 'var(--dsw-alias-label-secondary)' } }, text.promptNone)
-            : prompt.text === ''
-              ? h('div', { style: { marginTop: '6px', fontSize: '11px', color: 'var(--dsw-alias-label-secondary)' } }, text.promptEmpty)
+          : prompt.text === ''
+            ? h('div', { style: { marginTop: '6px', fontSize: '11px', color: 'var(--dsw-alias-label-secondary)' } }, text.promptEmpty)
               : h('pre', {
               style: {
                 margin: '8px 0 0', padding: '8px 10px', borderRadius: '8px',
