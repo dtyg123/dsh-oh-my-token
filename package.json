@@ -22,8 +22,8 @@
     "LICENSES"
   ],
   "bin": {
-    "oh-my-token": "./bin/oh-my-token.js",
-    "dsh-oh-my-token": "./bin/oh-my-token.js"
+    "oh-my-token": "bin/oh-my-token.js",
+    "dsh-oh-my-token": "bin/oh-my-token.js"
   },
   "engines": {
     "node": ">=20"
