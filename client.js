@@ -24,6 +24,154 @@ window.__ModuleLoader__.load({
     const STATS_ENDPOINT = '/dsh-oh-my-token/stats';
     const PROMPT_ENDPOINT = '/dsh-oh-my-token/prompt';
     const EDIT_ENDPOINT = '/dsh-oh-my-token/edit';
+    const DIFF_ENDPOINT = '/dsh-oh-my-token/diff';
+
+    // ── In-chat change marks ──────────────────────────────────────────────
+    //
+    // The model never reads the words the prose step removes, but the person
+    // should still see what was cut. Every request's record carries the text it
+    // produced; the same text is what the chat displays, so a message can be
+    // matched back to its record and the removed words drawn where they were:
+    // red and struck through, with any replacement in green.
+
+    /** Text produced by a recorded change -> its diff segments. */
+    const diffByText = new Map();
+
+    function rememberDiffs(recent) {
+      if (!Array.isArray(recent)) return;
+      for (const entry of recent) {
+        if (typeof entry?.after !== 'string' || entry.after === '') continue;
+        if (!Array.isArray(entry.diff)) continue;
+        diffByText.set(entry.after, entry.diff);
+      }
+      // A long-lived tab would otherwise keep every message it ever saw.
+      while (diffByText.size > 400) diffByText.delete(diffByText.keys().next().value);
+    }
+
+    /** One removal, anchored to the character it sits next to. */
+    function removalsOf(text) {
+      const segments = diffByText.get(text);
+      if (segments === undefined) return null;
+      const out = [];
+      let offset = 0;
+      let pending = null;
+      for (const segment of segments) {
+        const value = typeof segment?.text === 'string' ? segment.text : '';
+        if (segment?.kind === 'del') {
+          if (pending === null) pending = { removed: value, added: '', start: offset };
+          else pending.removed += value;
+          continue;
+        }
+        if (segment?.kind === 'add') {
+          if (pending !== null) pending.added += value;
+          continue;
+        }
+        if (value === '') continue;
+        if (pending !== null) {
+          // The node must cover one character, so it anchors on the next one.
+          pending.start = offset;
+          out.push(pending);
+          pending = null;
+        }
+        offset += value.length;
+      }
+      if (pending !== null && offset > 0) {
+        // A removal at the very end hangs on the character before it.
+        pending.start = offset - 1;
+        pending.trailing = true;
+        out.push(pending);
+      }
+      return out.length === 0 ? null : out;
+    }
+
+    const DIFF_RULE_ID = 'oh-my-token';
+
+    /** The user-message rule: one node per removal, so it renders where it was. */
+    const diffRule = {
+      id: DIFF_RULE_ID,
+      order: 50,
+      match(text, from) {
+        const removals = removalsOf(String(text));
+        if (removals === null) return undefined;
+        for (const removal of removals) {
+          if (removal.start < from) continue;
+          return {
+            id: DIFF_RULE_ID,
+            start: removal.start,
+            end: removal.start + 1,
+            data: {
+              removed: removal.removed,
+              added: removal.added,
+              trailing: removal.trailing === true,
+            },
+          };
+        }
+        return undefined;
+      },
+    };
+
+    const RED_MARK = {
+      color: 'var(--dsw-alias-state-error-primary)',
+      textDecoration: 'line-through',
+      background: 'rgba(239, 68, 68, 0.16)',
+      borderRadius: '3px',
+    };
+    const GREEN_MARK = {
+      color: 'var(--dsw-alias-state-success-primary)',
+      background: 'rgba(34, 197, 94, 0.18)',
+      borderRadius: '3px',
+      fontWeight: 600,
+    };
+
+    /** One anchor character plus the words the request dropped next to it. */
+    function ProseDiffNode(props) {
+      const data = props?.node?.data ?? {};
+      const removed = typeof data.removed === 'string' ? data.removed : '';
+      const added = typeof data.added === 'string' ? data.added : '';
+      const anchor = h('span', { key: 'anchor' }, props?.raw ?? '');
+      return h('span', null,
+        data.trailing === true ? anchor : null,
+        h('span', { key: 'removed', style: RED_MARK }, removed),
+        added === '' ? null : h('span', { key: 'added', style: GREEN_MARK }, added),
+        data.trailing === true ? null : anchor);
+    }
+
+    /**
+     * The assistant reply's change marks. The reply body is rendered by the
+     * harness's markdown, which offers no text hook, so the reply's action row
+     * carries the same red/green record instead.
+     */
+    function AssistantDiffChip(props) {
+      const id = props?.messageId;
+      const [segments, setSegments] = React.useState(null);
+      React.useEffect(() => {
+        if (typeof id !== 'string' || id === '') return undefined;
+        let live = true;
+        fetch(`${DIFF_ENDPOINT}?id=${encodeURIComponent(id)}`, { headers: { accept: 'application/json' } })
+          .then((response) => (response.ok ? response.json() : null))
+          .then((body) => { if (live) setSegments(Array.isArray(body?.segments) ? body.segments : []); })
+          .catch(() => { if (live) setSegments([]); });
+        return () => { live = false; };
+      }, [id]);
+      if (!Array.isArray(segments)) return null;
+      const changed = segments.filter((segment) => segment?.kind !== 'keep' && typeof segment?.text === 'string' && segment.text !== '');
+      if (changed.length === 0) return null;
+      return h('span', {
+        title: '省 Token：本次自动删改',
+        style: {
+          display: 'inline-flex', alignItems: 'baseline', gap: '2px', minWidth: 0,
+          padding: '0 4px', borderRadius: '4px', maxWidth: '320px', overflow: 'hidden',
+          fontSize: '10px', lineHeight: '16px', whiteSpace: 'nowrap',
+          color: 'var(--dsw-alias-label-secondary)',
+          background: 'var(--dsw-alias-bg-layer-1)',
+        },
+      }, h('span', { key: 'label', style: { flex: 'none', marginRight: '2px' } }, '省'),
+      ...changed.slice(0, 8).map((segment, index) => h('span', {
+        key: index,
+        style: segment.kind === 'del' ? RED_MARK : GREEN_MARK,
+      }, segment.text)));
+    }
+
 
     /**
      * Plain-language strength presets: one pick sets the budgets and the
@@ -473,7 +621,9 @@ window.__ModuleLoader__.load({
         try {
           const response = await fetch(STATE_ENDPOINT, { headers: { accept: 'application/json' } });
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
-          setState(await response.json());
+          const body = await response.json();
+          rememberDiffs(body?.recent);
+          setState(body);
           setError('');
         } catch (failure) {
           setError(`${text.failed}: ${String(failure?.message ?? failure)}`);
@@ -1157,14 +1307,41 @@ window.__ModuleLoader__.load({
     }
 
     return {
-      inject: ['slots'],
+      inject: ['slots', 'uiConversation'],
       apply(ctx) {
+        // Keep the message → change map warm even while the settings page is
+        // closed, because the chat renders messages at any time.
+        const refreshDiffs = () => {
+          fetch(STATE_ENDPOINT, { headers: { accept: 'application/json' } })
+            .then((response) => (response.ok ? response.json() : null))
+            .then((body) => rememberDiffs(body?.recent))
+            .catch(() => {});
+        };
+        refreshDiffs();
+        const timer = setInterval(refreshDiffs, 10000);
+        ctx.effect(() => () => clearInterval(timer));
+
         ctx.slots.inject('settings.section', () => ctx.slots.register({
           name: 'settings.section',
           id: 'dsh-oh-my-token',
           order: 61,
           label: () => TEXT.nav,
         }, SavingsPage));
+
+        // Removed words in the person's own messages, marked where they were.
+        ctx.uiConversation.userText.register(diffRule);
+        ctx.slots.inject('conversation.user.text.node', () => ctx.slots.register({
+          name: 'conversation.user.text.node',
+          key: DIFF_RULE_ID,
+          priority: 50,
+        }, ProseDiffNode));
+
+        // The same record in the reply's action row, since its markdown body is
+        // rendered by the harness and offers no text hook.
+        ctx.slots.inject('conversation.chat.assistant-actions', () => ctx.slots.register({
+          name: 'conversation.chat.assistant-actions',
+          key: DIFF_RULE_ID,
+        }, AssistantDiffChip));
       },
     };
   },
